@@ -1,5 +1,11 @@
 # B12 güncelleme notları
 
+## 1.0.1 — 25 Kasım 2026
+
+**Düzeltmeler**
+- Gece yarısı widget, saat kartı ve kadran göstergesi hemen yeni güne geçiyor (önceden sabah bir süre dünkü "Bugün tamam" görünebiliyordu)
+- Saat veya saat dilimi değişince özetler de yenileniyor
+
 ## 1.0 — 25 Kasım 2026
 
 İlk sürüm.

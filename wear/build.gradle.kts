@@ -11,8 +11,8 @@ android {
         applicationId = "com.b12.hatirlat"   // telefon ve saatte aynı olmalı
         minSdk = 30
         targetSdk = 36
-        versionCode = 2
-        versionName = "1.0"
+        versionCode = 4
+        versionName = "1.0.1"
     }
     signingConfigs {
         create("b12") {
