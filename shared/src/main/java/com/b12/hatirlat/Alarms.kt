@@ -70,13 +70,17 @@ class AlarmReceiver : BroadcastReceiver() {
         when (i.action) {
             Alarms.FIRE -> if (r != null && r.enabled && !r.deleted) {
                 // Telefon kapalıyken kaçan hatırlatmayı saatler sonra çalma.
-                if (now - at < 30 * 60_000L) Notifier.remind(ctx, r, at)
+                if (now - at < 30 * 60_000L && !Progress.has(ctx, r.id, at)) Notifier.remind(ctx, r, at)
                 Alarms.schedule(ctx, r, maxOf(now, at))
             }
-            Alarms.SNOOZED -> if (r != null && !r.deleted) Notifier.remind(ctx, r, now)
-            Alarms.ENDED -> if (r != null && !r.deleted) Notifier.ended(ctx, r)
+            Alarms.SNOOZED -> if (r != null && !r.deleted) Notifier.remind(ctx, r, at)
+            Alarms.ENDED -> if (r != null && !r.deleted) {
+                val xp = Progress.record(ctx, r, at, Progress.Kind.TIMER, toast = false)
+                Notifier.ended(ctx, r, xp)
+            }
             Alarms.DONE -> {
                 Notifier.cancel(ctx, id)
+                if (r != null && i.hasExtra("at")) Progress.record(ctx, r, at)
                 Alarms.cancelLater(ctx, id)
                 relay(ctx, "/n/done", id)
             }

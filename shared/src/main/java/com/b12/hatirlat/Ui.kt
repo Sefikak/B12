@@ -73,6 +73,34 @@ fun View.margins(ctx: Context, l: Number = 0, t: Number = 0, r: Number = 0, b: N
     return this
 }
 
+/** İlerleme çubuğu (0..1). */
+fun Context.bar(frac: Float, heightDp: Number = 8, fg: Int = Ui.ACCENT, bg: Int = Ui.CARD2): LinearLayout =
+    LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL
+        background = rounded(bg, 100)
+        val f = frac.coerceIn(0f, 1f)
+        addView(View(context).apply { background = rounded(fg, 100) }, LinearLayout.LayoutParams(0, dp(heightDp), f))
+        addView(View(context), LinearLayout.LayoutParams(0, dp(heightDp), 1f - f))
+    }
+
+/** Karttaki ✓ düğmesi: bugün bitti mi, kısmen mi? */
+fun Context.checkButton(done: Int, total: Int, sizeDp: Int, onClick: () -> Unit): TextView {
+    val full = total > 0 && done >= total
+    val text = when {
+        full -> "✓"
+        total > 1 && done > 0 -> "$done/$total"
+        else -> "✓"
+    }
+    return label(text, if (text.length > 1) 12 else 18, if (full) Ui.ON_ACCENT else Ui.ACCENT, bold = true).apply {
+        gravity = Gravity.CENTER
+        background = if (full) pressable(Ui.ACCENT, 100) else pressable(Ui.CARD, 100, Ui.ACCENT)
+        alpha = if (total == 0) 0.35f else 1f
+        contentDescription = "Yaptım"
+        setOnClickListener { onClick() }
+        layoutParams = LinearLayout.LayoutParams(dp(sizeDp), dp(sizeDp))
+    }
+}
+
 fun Context.vbox(): LinearLayout = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
 fun Context.hbox(): LinearLayout = LinearLayout(this).apply {
     orientation = LinearLayout.HORIZONTAL

@@ -13,6 +13,7 @@ import android.widget.Toast
 class MainActivity : WearActivity() {
     private lateinit var list: LinearLayout
     private lateinit var status: TextView
+    private lateinit var level: LinearLayout
     private val onChange: () -> Unit = { render() }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -24,6 +25,8 @@ class MainActivity : WearActivity() {
         c.addView(label("B12", 15, Ui.ACCENT, bold = true).apply { gravity = Gravity.CENTER }, lp())
         status = label("", 11, Ui.DIM).apply { gravity = Gravity.CENTER }
         c.addView(status, lp())
+        level = vbox()
+        c.addView(level, lp().also { it.topMargin = dp(6) })
         list = vbox()
         c.addView(list, lp().also { it.topMargin = dp(6) })
         c.addView(pill("+ Yeni", Ui.ACCENT, Ui.ON_ACCENT, 14) {
@@ -56,6 +59,11 @@ class MainActivity : WearActivity() {
     }
 
     private fun render() {
+        val s = Progress.stats(this)
+        level.removeAllViews()
+        level.addView(label("Sv ${s.level} · ${s.title}" + if (s.streak > 0) "  🔥${s.streak}" else "", 13, Ui.TEXT, bold = true).apply { gravity = Gravity.CENTER }, lp())
+        level.addView(bar(s.into.toFloat() / s.need, 5), lp().also { it.setMargins(dp(14), dp(4), dp(14), 0) })
+        level.addView(label("${s.into}/${s.need} XP", 10, Ui.DIM).apply { gravity = Gravity.CENTER }, lp())
         list.removeAllViews()
         val items = Store.visible(this)
         if (items.isEmpty()) {
@@ -63,9 +71,9 @@ class MainActivity : WearActivity() {
             return
         }
         for (r in items) {
-            val row = vbox().apply {
+            val row = hbox().apply {
                 background = pressable(Ui.CARD, 22)
-                setPadding(dp(14), dp(8), dp(14), dp(9))
+                setPadding(dp(14), dp(8), dp(8), dp(9))
                 setOnClickListener { startActivity(Intent(this@MainActivity, EditActivity::class.java).putExtra("id", r.id)) }
                 setOnLongClickListener {
                     Store.save(this@MainActivity, r.copy(enabled = !r.enabled))
@@ -73,10 +81,16 @@ class MainActivity : WearActivity() {
                     true
                 }
             }
-            row.addView(label("${r.icon()} ${r.title.ifBlank { "Adsız" }}", 15, if (r.enabled) Ui.TEXT else Ui.DIM, bold = true).apply {
+            val texts = vbox()
+            texts.addView(label("${r.icon()} ${r.title.ifBlank { "Adsız" }}", 15, if (r.enabled) Ui.TEXT else Ui.DIM, bold = true).apply {
                 maxLines = 2
             })
-            row.addView(label(r.nextText(), 12, if (r.enabled) Ui.ACCENT else Ui.DIM))
+            texts.addView(label(r.nextText(), 12, if (r.enabled) Ui.ACCENT else Ui.DIM))
+            row.addView(texts, lp(0, weight = 1f))
+            val (done, total) = Progress.today(this, r)
+            if (total > 0) row.addView(checkButton(done, total, 38) {
+                if (!Progress.markNow(this, r)) Toast.makeText(this, "Bugün tamam ✓", Toast.LENGTH_SHORT).show()
+            })
             list.addView(row, lp().also { it.topMargin = dp(6) })
         }
     }

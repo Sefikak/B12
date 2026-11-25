@@ -18,6 +18,7 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.Switch
 import android.widget.TextView
+import android.widget.Toast
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
@@ -32,6 +33,7 @@ class MainActivity : Activity() {
     private lateinit var greet: TextView
     private lateinit var date: TextView
     private lateinit var hero: LinearLayout
+    private lateinit var levelBox: LinearLayout
     private val onChange: () -> Unit = { render() }
     private val ticker = android.os.Handler(android.os.Looper.getMainLooper())
     private val tick = object : Runnable {
@@ -48,6 +50,8 @@ class MainActivity : Activity() {
         date = label("", 15, Ui.DIM)
         content.addView(greet)
         content.addView(date)
+        levelBox = vbox()
+        content.addView(levelBox, lp().also { it.topMargin = dp(18) })
         hero = vbox()
         content.addView(hero, lp().also { it.topMargin = dp(18) })
         status = label("⌚ Saat aranıyor…", 13, Ui.DIM)
@@ -146,6 +150,7 @@ class MainActivity : Activity() {
             else -> "İyi geceler 🌙"
         }
         date.text = SimpleDateFormat("d MMMM EEEE", Locale("tr")).format(c.time)
+        renderLevel()
         hero.removeAllViews()
         hero.background = null
         hero.setPadding(0, 0, 0, 0)
@@ -180,12 +185,47 @@ class MainActivity : Activity() {
         val meta = listOf(r.daysText(), r.durationText()).filter { it.isNotEmpty() }.joinToString(" · ")
         texts.addView(label(meta, 13, Ui.DIM).apply { setPadding(0, dp(2), 0, 0) })
         c.addView(texts, lp(0, weight = 1f))
-        c.addView(Switch(this).apply {
-            isChecked = r.enabled
-            styleSwitch(this)
-            setOnCheckedChangeListener { _, on -> Store.save(this@MainActivity, r.copy(enabled = on)) }
+        val (done, total) = Progress.today(this, r)
+        if (total > 0) texts.addView(label(if (done >= total) "Bugün tamam ✓" else "Bugün $done/$total", 12, if (done >= total) Ui.ACCENT else Ui.DIM, bold = true).apply { setPadding(0, dp(4), 0, 0) })
+        c.addView(checkButton(done, total, 48) {
+            when {
+                total == 0 -> Toast.makeText(this, "Bugün bu hatırlatmanın günü değil", Toast.LENGTH_SHORT).show()
+                !Progress.markNow(this, r) -> Toast.makeText(this, "Bugün hepsi tamam ✓", Toast.LENGTH_SHORT).show()
+            }
         })
         return c
+    }
+
+    private fun renderLevel() {
+        val s = Progress.stats(this)
+        levelBox.removeAllViews()
+        levelBox.background = rounded(Ui.CARD, 22)
+        levelBox.setPadding(dp(16), dp(14), dp(16), dp(14))
+        val top = hbox()
+        top.addView(label(s.level.toString(), 22, Ui.ACCENT, bold = true).apply {
+            gravity = Gravity.CENTER
+            background = rounded(Ui.CARD2, 100, Ui.ACCENT)
+        }, lp(dp(54), dp(54)).also { it.rightMargin = dp(14) })
+        val mid = vbox()
+        mid.addView(label("Seviye ${s.level} · ${s.title}", 17, Ui.TEXT, bold = true))
+        mid.addView(bar(s.into.toFloat() / s.need, 8), lp().also { it.topMargin = dp(8); it.bottomMargin = dp(6) })
+        mid.addView(label("${s.into} / ${s.need} XP · toplam ${s.xp} XP", 12, Ui.DIM))
+        top.addView(mid, lp(0, weight = 1f))
+        levelBox.addView(top)
+
+        val bottom = hbox().apply { setPadding(0, dp(12), 0, 0) }
+        bottom.addView(label(if (s.streak > 0) "🔥 ${s.streak} gün seri" else "🔥 Seri yok", 14, if (s.streak > 0) Ui.TEXT else Ui.DIM, bold = true), lp(0, weight = 1f))
+        val cal = Calendar.getInstance()
+        for (i in 0..6) {
+            val d = Calendar.getInstance().apply { timeInMillis = cal.timeInMillis; add(Calendar.DAY_OF_YEAR, i - 6) }
+            val on = s.week[i]
+            bottom.addView(label(Reminder.DAY_LETTER[Reminder.dayIndex(d)], 10, if (on) Ui.ON_ACCENT else Ui.DIM, bold = true).apply {
+                gravity = Gravity.CENTER
+                background = if (on) rounded(Ui.ACCENT, 100) else rounded(Ui.CARD2, 100, if (i == 6) Ui.DIM else 0)
+            }, lp(dp(26), dp(26)).also { it.leftMargin = dp(3) })
+        }
+        levelBox.addView(bottom)
+        if (s.todayXp > 0) levelBox.addView(label("Bugün +${s.todayXp} XP", 12, Ui.ACCENT, bold = true).apply { setPadding(0, dp(8), 0, 0) })
     }
 
     private fun menu(r: Reminder) {

@@ -54,7 +54,7 @@ object Store {
         Alarms.schedule(ctx, saved)
         if (saved.deleted || !saved.enabled) Notifier.cancel(ctx, saved.id)
         Sync.publish(ctx, saved)
-        changed()
+        notifyChanged()
         return saved
     }
 
@@ -78,12 +78,12 @@ object Store {
         if (applied) {
             Alarms.schedule(ctx, r)
             if (r.deleted || !r.enabled) Notifier.cancel(ctx, r.id)
-            changed()
+            notifyChanged()
         }
         return applied
     }
 
-    private fun changed() {
+    fun notifyChanged() {
         main.post { listeners.forEach { it() } }
     }
 }

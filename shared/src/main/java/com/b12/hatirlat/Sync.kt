@@ -23,6 +23,7 @@ import java.util.concurrent.TimeUnit
  */
 object Sync {
     const val PREFIX = "/r/"
+    const val DONE_PREFIX = "/d/"
     const val CAP_PHONE = "b12_phone"
     const val CAP_WATCH = "b12_watch"
     private val io = Executors.newSingleThreadExecutor()
@@ -41,15 +42,41 @@ object Sync {
         }
     }
 
+    fun publishDone(ctx: Context, d: Done) {
+        val app = ctx.applicationContext
+        io.execute {
+            try {
+                val req = PutDataMapRequest.create(DONE_PREFIX + d.key)
+                req.dataMap.putString("json", d.toJson().toString())
+                Tasks.await(Wearable.getDataClient(app).putDataItem(req.asPutDataRequest().setUrgent()), 20, TimeUnit.SECONDS)
+            } catch (_: Exception) {
+            }
+        }
+    }
+
+    fun parseDone(json: String?): Done? = try {
+        json?.let { Done.fromJson(JSONObject(it)) }
+    } catch (_: Exception) {
+        null
+    }
+
     /** Açılışta: Data Layer'daki her şeyi al, yerelde daha yeni olanları geri gönder. */
     fun pullAll(ctx: Context, done: (() -> Unit)? = null) {
         val app = ctx.applicationContext
         io.execute {
             try {
                 val best = HashMap<String, Long>()
+                val doneKeys = HashSet<String>()
                 val buf = Tasks.await(Wearable.getDataClient(app).dataItems, 20, TimeUnit.SECONDS)
                 try {
                     for (item in buf) {
+                        if (item.uri.path?.startsWith(DONE_PREFIX) == true) {
+                            parseDone(DataMapItem.fromDataItem(item).dataMap.getString("json"))?.let {
+                                doneKeys.add(it.key)
+                                Progress.merge(app, it)
+                            }
+                            continue
+                        }
                         if (item.uri.path?.startsWith(PREFIX) != true) continue
                         val r = parse(DataMapItem.fromDataItem(item).dataMap.getString("json")) ?: continue
                         best[r.id] = maxOf(best[r.id] ?: 0L, r.updatedAt)
@@ -59,6 +86,7 @@ object Sync {
                     buf.release()
                 }
                 for (r in Store.all(app)) if ((best[r.id] ?: -1L) < r.updatedAt) publish(app, r)
+                for (d in Progress.events(app)) if (d.key !in doneKeys) publishDone(app, d)
             } catch (_: Exception) {
             }
             done?.let { main.post(it) }
@@ -123,6 +151,10 @@ class SyncService : WearableListenerService() {
         for (e in events) {
             if (e.type != DataEvent.TYPE_CHANGED) continue
             val item = e.dataItem
+            if (item.uri.path?.startsWith(Sync.DONE_PREFIX) == true) {
+                Sync.parseDone(DataMapItem.fromDataItem(item).dataMap.getString("json"))?.let { Progress.merge(this, it) }
+                continue
+            }
             if (item.uri.path?.startsWith(Sync.PREFIX) != true) continue
             Sync.parse(DataMapItem.fromDataItem(item).dataMap.getString("json"))?.let { Store.merge(this, it) }
         }

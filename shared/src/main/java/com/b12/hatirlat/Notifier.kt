@@ -35,7 +35,8 @@ object Notifier {
         return PendingIntent.getActivity(ctx, 0, i, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
     }
 
-    private fun action(ctx: Context, act: String, id: String) = Alarms.pending(ctx, Alarms.intent(ctx, act, id))
+    private fun action(ctx: Context, act: String, id: String, at: Long? = null) =
+        Alarms.pending(ctx, Alarms.intent(ctx, act, id).also { if (at != null) it.putExtra("at", at) })
 
     private fun base(ctx: Context, r: Reminder, ch: String) = NotificationCompat.Builder(ctx, ch)
         .setSmallIcon(R.drawable.ic_b12)
@@ -60,7 +61,7 @@ object Notifier {
             .setWhen(at)
             .setShowWhen(true)
         if (r.minutes > 0) b.addAction(0, "Başla (${r.durationText()})", action(ctx, Alarms.START, r.id))
-        b.addAction(0, "Yaptım", action(ctx, Alarms.DONE, r.id))
+        b.addAction(0, "Yaptım ✓", action(ctx, Alarms.DONE, r.id, at))
             .addAction(0, "${Alarms.SNOOZE_MIN} dk ertele", action(ctx, Alarms.SNOOZE, r.id))
         post(ctx, r.id, b)
     }
@@ -75,21 +76,39 @@ object Notifier {
             .setChronometerCountDown(true)
             .setWhen(end)
             .setShowWhen(true)
-            .addAction(0, "Bitir", action(ctx, Alarms.DONE, r.id))
+            .addAction(0, "Bitir", action(ctx, Alarms.DONE, r.id, end))
         post(ctx, r.id, b)
     }
 
-    fun ended(ctx: Context, r: Reminder) {
+    fun ended(ctx: Context, r: Reminder, xp: Int?) {
         ensure(ctx)
         val b = base(ctx, r, CH)
             .setContentTitle("Süre doldu ✓")
-            .setContentText("${r.title} · ${r.durationText()}")
+            .setContentText("${r.title} · ${r.durationText()}" + (xp?.let { " · +$it XP" } ?: ""))
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setVibrate(VIBE)
             .setAutoCancel(true)
         post(ctx, r.id, b)
     }
+
+    fun levelUp(ctx: Context, level: Int) {
+        ensure(ctx)
+        val b = NotificationCompat.Builder(ctx, CH)
+            .setSmallIcon(R.drawable.ic_b12)
+            .setColor(0xFF8AB4FF.toInt())
+            .setContentTitle("🎉 Seviye $level!")
+            .setContentText("Yeni unvan: ${Progress.title(level)}")
+            .setContentIntent(openApp(ctx))
+            .setAutoCancel(true)
+            .setLocalOnly(isWatch(ctx) || Sync.peerHasApp(ctx))
+        try {
+            NotificationManagerCompat.from(ctx).notify(LEVEL_ID, b.build())
+        } catch (_: SecurityException) {
+        }
+    }
+
+    private const val LEVEL_ID = 0x0B12
 
     fun cancel(ctx: Context, id: String) = NotificationManagerCompat.from(ctx).cancel(nid(id))
 
