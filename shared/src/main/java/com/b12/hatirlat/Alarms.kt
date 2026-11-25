@@ -48,7 +48,7 @@ object Alarms {
 
     /** Bu çalma için ısrar sürsün mü: yapılmadıysa, aynı gün içindeyse ve sıradaki saat henüz gelmediyse. */
     fun stillDue(ctx: Context, r: Reminder, occ: Long, now: Long = System.currentTimeMillis()): Boolean {
-        if (r.deleted || !r.enabled || Progress.has(ctx, r.id, occ)) return false
+        if (r.deleted || !r.enabled || Progress.has(ctx, r.id, occ) || Progress.dayComplete(ctx, r, occ)) return false
         val next = r.nextAfter(occ)
         if (next != null && next <= now) return false
         val a = java.util.Calendar.getInstance().apply { timeInMillis = occ }
@@ -86,7 +86,7 @@ class AlarmReceiver : BroadcastReceiver() {
         when (i.action) {
             Alarms.FIRE -> if (r != null && r.enabled && !r.deleted) {
                 // Telefon kapalıyken kaçan hatırlatmayı saatler sonra çalma.
-                if (now - at < 30 * 60_000L && !Progress.has(ctx, r.id, at)) Notifier.remind(ctx, r, at)
+                if (now - at < 30 * 60_000L && !Progress.has(ctx, r.id, at) && !Progress.dayComplete(ctx, r, at)) Notifier.remind(ctx, r, at)
                 Alarms.schedule(ctx, r, maxOf(now, at))
             }
             Alarms.SNOOZED -> if (r != null && Alarms.stillDue(ctx, r, occ, now)) Notifier.remind(ctx, r, occ)

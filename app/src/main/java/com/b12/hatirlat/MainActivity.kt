@@ -156,7 +156,7 @@ class MainActivity : Activity() {
         hero.setPadding(0, 0, 0, 0)
         val now = System.currentTimeMillis()
         val next = Store.visible(this).filter { it.enabled }
-            .mapNotNull { r -> r.nextAfter(now)?.let { r to it } }.minByOrNull { it.second } ?: return
+            .mapNotNull { r -> nextOpen(r, now)?.let { r to it } }.minByOrNull { it.second } ?: return
         val (r, at) = next
         hero.background = rounded(Ui.ACCENT, 24)
         hero.setPadding(dp(20), dp(16), dp(20), dp(18))
@@ -164,6 +164,14 @@ class MainActivity : Activity() {
         hero.addView(label("${r.icon()}  ${r.title}", 22, Ui.ON_ACCENT, bold = true).apply { setPadding(0, dp(6), 0, 0) })
         hero.addView(label(r.nextText(now) + if (r.minutes > 0) " · ${r.durationText()}" else "", 15, 0xCC0F1216.toInt()))
         hero.setOnClickListener { startActivity(Intent(this, EditActivity::class.java).putExtra("id", r.id)) }
+    }
+
+    /** Günlük hedefi tamamlanmış günleri atlayarak sıradaki çalma. */
+    private fun nextOpen(r: Reminder, now: Long): Long? {
+        var t = r.nextAfter(now)
+        var guard = 0
+        while (t != null && Progress.dayComplete(this, r, t) && guard++ < 60) t = r.nextAfter(t)
+        return t
     }
 
     private fun card(r: Reminder): View {
@@ -181,12 +189,12 @@ class MainActivity : Activity() {
         val texts = vbox()
         val fg = if (r.enabled) Ui.TEXT else Ui.DIM
         texts.addView(label(r.title.ifBlank { "Adsız" }, 17, fg, bold = true))
-        texts.addView(label(r.timesText(), 15, if (r.enabled) Ui.ACCENT else Ui.DIM).apply { setPadding(0, dp(3), 0, 0) })
+        texts.addView(timeChips(r), lp().also { it.topMargin = dp(6); it.bottomMargin = dp(2) })
         val meta = listOf(r.daysText(), r.durationText(), if (r.nag) "↻ ${r.nagMin} dk" else "").filter { it.isNotEmpty() }.joinToString(" · ")
         texts.addView(label(meta, 13, Ui.DIM).apply { setPadding(0, dp(2), 0, 0) })
         c.addView(texts, lp(0, weight = 1f))
         val (done, total) = Progress.today(this, r)
-        if (total > 0) texts.addView(label(if (done >= total) "Bugün tamam ✓" else "Bugün $done/$total", 12, if (done >= total) Ui.ACCENT else Ui.DIM, bold = true).apply { setPadding(0, dp(4), 0, 0) })
+        if (total > 0) texts.addView(label(if (done >= total) "Bugün tamam ✓" else "Bugün $done/$total tik", 12, if (done >= total) Ui.ACCENT else Ui.DIM, bold = true).apply { setPadding(0, dp(4), 0, 0) })
         c.addView(checkButton(done, total, 48) {
             when {
                 total == 0 -> Toast.makeText(this, "Bugün bu hatırlatmanın günü değil", Toast.LENGTH_SHORT).show()
@@ -194,6 +202,40 @@ class MainActivity : Activity() {
             }
         })
         return c
+    }
+
+    /** Saatler ayrı ayrı: tiklenen dolu, vakti gelmiş olan çerçeveli, gelecek olan soluk. Dokununca o saat tiklenir. */
+    private fun timeChips(r: Reminder): View {
+        val box = vbox()
+        val now = System.currentTimeMillis()
+        val slots = Progress.todaySlots(r, now)
+        val (done, goal) = Progress.today(this, r, now)
+        val times = r.times.sorted()
+        for (chunk in times.indices.chunked(4)) {
+            val row = hbox()
+            for (i in chunk) {
+                val at = slots.getOrNull(i)
+                val ticked = at != null && Progress.slotDone(this, r, at)
+                val due = at != null && at <= now
+                val (bg, fg, stroke) = when {
+                    !r.enabled || at == null -> Triple(Ui.CARD2, Ui.DIM, 0)
+                    ticked -> Triple(Ui.ACCENT, Ui.ON_ACCENT, 0)
+                    due && done < goal -> Triple(Ui.CARD, Ui.ACCENT, Ui.ACCENT)
+                    else -> Triple(Ui.CARD2, Ui.TEXT, 0)
+                }
+                val chip = label(Reminder.hm(times[i]) + if (ticked) " ✓" else "", 13, fg, bold = true).apply {
+                    gravity = Gravity.CENTER
+                    setPadding(dp(10), dp(5), dp(10), dp(5))
+                    background = if (at != null && r.enabled) pressable(bg, 100, stroke) else rounded(bg, 100)
+                    if (at != null && r.enabled && !ticked) setOnClickListener {
+                        if (!Progress.markAt(this@MainActivity, r, at)) Toast.makeText(this@MainActivity, "Bugünkü hedef tamam ✓", Toast.LENGTH_SHORT).show()
+                    }
+                }
+                row.addView(chip, lp(LinearLayout.LayoutParams.WRAP_CONTENT).also { it.rightMargin = dp(6); it.topMargin = dp(4) })
+            }
+            box.addView(row)
+        }
+        return box
     }
 
     private fun renderLevel() {

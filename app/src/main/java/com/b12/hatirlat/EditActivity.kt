@@ -26,6 +26,8 @@ class EditActivity : Activity() {
     private var enabled = true
     private var nag = true
     private var nagMin = 15
+    private var target = 0
+    private lateinit var goalText: TextView
     private var spreadCount = 4
     private var spreadStart = 9 * 60
     private var spreadEnd = 21 * 60
@@ -50,6 +52,7 @@ class EditActivity : Activity() {
         enabled = base.enabled
         nag = base.nag
         nagMin = base.nagMin
+        target = base.target
         savedInstanceState?.let { st ->
             days = st.getInt("days", days)
             times.clear(); times.addAll(st.getIntArray("times")?.toList() ?: base.times)
@@ -57,6 +60,7 @@ class EditActivity : Activity() {
             enabled = st.getBoolean("enabled", enabled)
             nag = st.getBoolean("nag", nag)
             nagMin = st.getInt("nagMin", nagMin)
+            target = st.getInt("target", target)
         }
 
         val c = vbox().apply { setPadding(dp(20), dp(14), dp(20), dp(40)) }
@@ -134,6 +138,21 @@ class EditActivity : Activity() {
             renderTimes()
         }, lp().also { it.topMargin = dp(10) })
         c.addView(spread, lp().also { it.topMargin = dp(12) })
+
+        // Günlük tik hedefi
+        c.addView(section("Günde kaç tik?"))
+        val goalRow = hbox().apply {
+            background = rounded(Ui.CARD, 16)
+            setPadding(dp(12), dp(8), dp(12), dp(8))
+        }
+        goalRow.addView(stepBtn("−") { stepGoal(-1) })
+        goalText = label("", 17, Ui.TEXT, bold = true).apply { gravity = Gravity.CENTER }
+        goalRow.addView(goalText, lp(0, weight = 1f))
+        goalRow.addView(stepBtn("+") { stepGoal(+1) })
+        c.addView(goalRow)
+        c.addView(label("Hedefe ulaşınca o günün kalan bildirimleri ve ısrar durur. Saat sayısından fazla seçersen fazlası karttaki ✓ ile atılır.", 13, Ui.DIM).apply {
+            setPadding(dp(4), dp(6), dp(4), 0)
+        })
 
         // Süre
         c.addView(section("Süre (isteğe bağlı)"))
@@ -215,6 +234,7 @@ class EditActivity : Activity() {
         out.putBoolean("enabled", enabled)
         out.putBoolean("nag", nag)
         out.putInt("nagMin", nagMin)
+        out.putInt("target", target)
     }
 
     private fun section(t: String) = label(t, 14, Ui.DIM, bold = true).apply { setPadding(dp(4), dp(22), 0, dp(8)) }
@@ -246,7 +266,21 @@ class EditActivity : Activity() {
         }
     }
 
+    private fun stepGoal(d: Int) {
+        val cur = if (target > 0) target else times.size.coerceAtLeast(1)
+        val n = (cur + d).coerceIn(1, 20)
+        target = if (n == times.size) 0 else n
+        renderGoal()
+    }
+
+    private fun renderGoal() {
+        if (!::goalText.isInitialized) return
+        val auto = times.size.coerceAtLeast(1)
+        goalText.text = if (target == 0) "$auto tik (saat başına)" else "$target tik"
+    }
+
     private fun renderTimes() {
+        renderGoal()
         times.sort()
         timeList.removeAllViews()
         if (times.isEmpty()) {
@@ -304,7 +338,7 @@ class EditActivity : Activity() {
             times.isEmpty() -> return toast("En az bir saat ekle")
             days == 0 -> return toast("En az bir gün seç")
         }
-        Store.save(this, base.copy(title = t, days = days, times = times.toList(), minutes = minutes, enabled = enabled, nag = nag, nagMin = nagMin))
+        Store.save(this, base.copy(title = t, days = days, times = times.toList(), minutes = minutes, enabled = enabled, nag = nag, nagMin = nagMin, target = target))
         finish()
     }
 

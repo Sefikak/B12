@@ -179,23 +179,49 @@ object Progress {
         }
     }
 
-    /** (bugün yapılan, bugün planlanan) */
-    fun today(ctx: Context, r: Reminder, now: Long = System.currentTimeMillis()): Pair<Int, Int> {
-        val slots = todaySlots(r, now)
-        val m = synchronized(lock) { read(ctx) }
-        return slots.count { m.containsKey("${r.id}_$it") } to slots.size
+    /** Bugün bu hatırlatma için atılan tikler (anahtar → kayıt). */
+    private fun todayDone(m: Map<String, Done>, r: Reminder, now: Long): List<Done> {
+        val d0 = dayStart(now)
+        val d1 = dayStart(now + 0, -1)
+        return m.values.filter { it.rid == r.id && it.at >= d0 && it.at < d1 }
     }
 
-    /** Elle işaretlenecek an: geçmiş ve yapılmamış en son, yoksa yaklaşan ilk. Hepsi bittiyse null. */
+    /** (bugün atılan tik, günlük hedef). Bugün seçili gün değilse hedef 0. */
+    fun today(ctx: Context, r: Reminder, now: Long = System.currentTimeMillis()): Pair<Int, Int> {
+        val c = Calendar.getInstance().apply { timeInMillis = now }
+        if (!r.hasDay(Reminder.dayIndex(c))) return 0 to 0
+        val m = synchronized(lock) { read(ctx) }
+        return todayDone(m, r, now).size.coerceAtMost(r.goal) to r.goal
+    }
+
+    /** Bugünün hedefi tamamlandı mı (bildirim ve ısrar bunu sorar). [at] o günün herhangi bir anı. */
+    fun dayComplete(ctx: Context, r: Reminder, at: Long): Boolean {
+        val m = synchronized(lock) { read(ctx) }
+        return todayDone(m, r, at).size >= r.goal
+    }
+
+    /** Bu saat bugün tiklendi mi? */
+    fun slotDone(ctx: Context, r: Reminder, at: Long) = has(ctx, r.id, at)
+
+    /** Elle tik için an: geçmiş ve tiklenmemiş en son saat, yoksa yaklaşan ilk; saatler bittiyse ek tik. */
     fun slotToMark(ctx: Context, r: Reminder, now: Long = System.currentTimeMillis()): Long? {
         val m = synchronized(lock) { read(ctx) }
+        if (todayDone(m, r, now).size >= r.goal) return null
         val open = todaySlots(r, now).filter { !m.containsKey("${r.id}_$it") }
-        return open.lastOrNull { it <= now } ?: open.firstOrNull()
+        open.lastOrNull { it <= now }?.let { return it }
+        open.firstOrNull()?.let { return it }
+        // Hedef saat sayısından fazla: günün başına göre ek anahtarlar (00:00:00.001, .002 …)
+        val d0 = dayStart(now)
+        return (1..50).map { d0 + it }.first { !m.containsKey("${r.id}_$it") }
     }
 
-    /** Karttaki ✓: bugünün sıradaki işini yapıldı say. */
-    fun markNow(ctx: Context, r: Reminder): Boolean {
-        val at = slotToMark(ctx, r) ?: return false
+    /** Karttaki ✓: bugünün sıradaki tikini at. */
+    fun markNow(ctx: Context, r: Reminder): Boolean = markAt(ctx, r, slotToMark(ctx, r))
+
+    /** Belirli bir saati tikle (karttaki saat çipi). */
+    fun markAt(ctx: Context, r: Reminder, at: Long?): Boolean {
+        if (at == null || has(ctx, r.id, at)) return false
+        if (today(ctx, r).let { it.first >= it.second && it.second > 0 }) return false
         Notifier.cancel(ctx, r.id)
         Alarms.cancelLater(ctx, r.id)
         record(ctx, r, at)

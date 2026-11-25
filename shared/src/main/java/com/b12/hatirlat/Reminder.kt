@@ -22,12 +22,17 @@ data class Reminder(
     /** Yapana kadar hatırlat: bildirim ✓'ye kadar kalır, kaydırılırsa nagMin dakika sonra geri gelir. */
     val nag: Boolean = false,
     val nagMin: Int = 15,
+    /** Günde kaç tik gerekir; 0 = saat sayısı kadar. */
+    val target: Int = 0,
 ) {
+    /** Geçerli günlük tik hedefi. */
+    val goal get() = if (target > 0) target else times.size.coerceAtLeast(1)
+
     fun toJson(): JSONObject = JSONObject()
         .put("id", id).put("title", title).put("days", days)
         .put("times", JSONArray(times)).put("minutes", minutes)
         .put("enabled", enabled).put("updatedAt", updatedAt).put("deleted", deleted)
-        .put("nag", nag).put("nagMin", nagMin)
+        .put("nag", nag).put("nagMin", nagMin).put("target", target)
 
     fun hasDay(i: Int) = days and (1 shl i) != 0
 
@@ -143,6 +148,7 @@ data class Reminder(
                 deleted = o.optBoolean("deleted"),
                 nag = o.optBoolean("nag"),
                 nagMin = o.optInt("nagMin", 15).coerceIn(1, 240),
+                target = o.optInt("target", 0).coerceIn(0, 50),
             )
         }
 

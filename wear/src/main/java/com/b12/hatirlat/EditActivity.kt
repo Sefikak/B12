@@ -20,6 +20,8 @@ class EditActivity : WearActivity() {
     private var enabled = true
     private var nag = true
     private var nagMin = 15
+    private var target = 0
+    private lateinit var goalText: TextView
 
     private lateinit var title: EditText
     private lateinit var dayRows: LinearLayout
@@ -39,6 +41,7 @@ class EditActivity : WearActivity() {
         enabled = base.enabled
         nag = base.nag
         nagMin = base.nagMin
+        target = base.target
         savedInstanceState?.let { s ->
             days = s.getInt("days", days)
             times.clear(); times.addAll(s.getIntArray("times")?.toList() ?: base.times)
@@ -46,6 +49,7 @@ class EditActivity : WearActivity() {
             enabled = s.getBoolean("enabled", enabled)
             nag = s.getBoolean("nag", nag)
             nagMin = s.getInt("nagMin", nagMin)
+            target = s.getInt("target", target)
         }
 
         val c = vbox().apply {
@@ -77,6 +81,14 @@ class EditActivity : WearActivity() {
         timeList = vbox()
         c.addView(timeList, lp())
         c.addView(pill("+ Saat", Ui.CARD, Ui.ACCENT, 13) { pick(-1, times.maxOrNull()?.let { (it + 60) % 1440 } ?: (9 * 60)) }, lp())
+
+        c.addView(section("Günde kaç tik"))
+        val goalRow = hbox()
+        goalRow.addView(step("−") { stepGoal(-1) })
+        goalText = label("", 13, Ui.TEXT, bold = true).apply { gravity = Gravity.CENTER }
+        goalRow.addView(goalText, lp(0, weight = 1f))
+        goalRow.addView(step("+") { stepGoal(+1) })
+        c.addView(goalRow, lp())
 
         c.addView(section("Süre"))
         val durRow = hbox()
@@ -119,6 +131,7 @@ class EditActivity : WearActivity() {
         out.putBoolean("enabled", enabled)
         out.putBoolean("nag", nag)
         out.putInt("nagMin", nagMin)
+        out.putInt("target", target)
     }
 
     private fun section(t: String) = label(t, 12, Ui.DIM, bold = true).apply {
@@ -147,7 +160,21 @@ class EditActivity : WearActivity() {
         }
     }
 
+    private fun stepGoal(d: Int) {
+        val cur = if (target > 0) target else times.size.coerceAtLeast(1)
+        val n = (cur + d).coerceIn(1, 20)
+        target = if (n == times.size) 0 else n
+        renderGoal()
+    }
+
+    private fun renderGoal() {
+        if (!::goalText.isInitialized) return
+        val auto = times.size.coerceAtLeast(1)
+        goalText.text = if (target == 0) "$auto (saat başına)" else "$target tik"
+    }
+
     private fun renderTimes() {
+        renderGoal()
         times.sort()
         timeList.removeAllViews()
         for ((idx, m) in times.withIndex()) {
@@ -202,7 +229,7 @@ class EditActivity : WearActivity() {
             Toast.makeText(this, err, Toast.LENGTH_SHORT).show()
             return
         }
-        Store.save(this, base.copy(title = t, days = days, times = times.toList(), minutes = minutes, enabled = enabled, nag = nag, nagMin = nagMin))
+        Store.save(this, base.copy(title = t, days = days, times = times.toList(), minutes = minutes, enabled = enabled, nag = nag, nagMin = nagMin, target = target))
         finish()
     }
 }
