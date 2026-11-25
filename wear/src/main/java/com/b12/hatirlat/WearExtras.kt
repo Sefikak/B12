@@ -36,6 +36,7 @@ class B12WearApp : Application() {
                 ComplicationDataSourceUpdateRequester.create(ctx, ComponentName(ctx, TodayComplication::class.java)).requestUpdateAll()
             } catch (_: Exception) {}
         }
+        Alarms.scheduleDay(this)
     }
 }
 

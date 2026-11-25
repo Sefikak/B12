@@ -18,6 +18,7 @@ object Alarms {
     const val START = "com.b12.hatirlat.START"
     const val DISMISSED = "com.b12.hatirlat.DISMISSED"
     const val TICK = "com.b12.hatirlat.TICK"
+    const val DAY = "com.b12.hatirlat.DAY"
     const val SNOOZE_MIN = 10
 
     private fun am(ctx: Context) = ctx.getSystemService(AlarmManager::class.java)
@@ -64,6 +65,27 @@ object Alarms {
 
     fun rescheduleAll(ctx: Context) {
         Store.all(ctx).forEach { schedule(ctx, it) }
+        scheduleDay(ctx)
+    }
+
+    /**
+     * Gün dönümünde widget, Tile ve kadran yenilensin (yoksa sabah dünkü "tamam"ı gösterir).
+     * Uyandırmayan alarm: ekran kapalıysa cihaz uyanınca teslim edilir, pil harcamaz.
+     */
+    fun scheduleDay(ctx: Context) {
+        val c = java.util.Calendar.getInstance().apply {
+            add(java.util.Calendar.DAY_OF_YEAR, 1)
+            set(java.util.Calendar.HOUR_OF_DAY, 0); set(java.util.Calendar.MINUTE, 0)
+            set(java.util.Calendar.SECOND, 5); set(java.util.Calendar.MILLISECOND, 0)
+        }
+        am(ctx).setWindow(AlarmManager.RTC, c.timeInMillis, 5 * 60_000L, pending(ctx, intent(ctx, DAY, "day")))
+    }
+
+    /** Ekrandaki özetleri hemen yenile ve sonraki gün dönümünü kur. */
+    fun refreshDay(ctx: Context) {
+        Store.all(ctx)  // Store'un uygulama bağlamını ayarlar
+        Store.notifyChanged()
+        scheduleDay(ctx)
     }
 
     fun snoozeMin(r: Reminder?) = if (r != null && r.nag) r.nagMin else SNOOZE_MIN
@@ -79,6 +101,7 @@ object Alarms {
 
 class AlarmReceiver : BroadcastReceiver() {
     override fun onReceive(ctx: Context, i: Intent) {
+        if (i.action == Alarms.DAY) return Alarms.refreshDay(ctx)
         val id = i.getStringExtra("id") ?: return
         val r = Store.get(ctx, id)
         val now = System.currentTimeMillis()
@@ -129,5 +152,8 @@ class AlarmReceiver : BroadcastReceiver() {
 }
 
 class BootReceiver : BroadcastReceiver() {
-    override fun onReceive(ctx: Context, i: Intent) = Alarms.rescheduleAll(ctx)
+    override fun onReceive(ctx: Context, i: Intent) {
+        Alarms.rescheduleAll(ctx)
+        Alarms.refreshDay(ctx)  // saat/saat dilimi değiştiyse "bugün" de değişmiş olabilir
+    }
 }

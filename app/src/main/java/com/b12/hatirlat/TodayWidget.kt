@@ -68,5 +68,6 @@ class B12App : Application() {
     override fun onCreate() {
         super.onCreate()
         Store.onChangeHook = { ctx -> TodayWidget.refresh(ctx) }
+        Alarms.scheduleDay(this)
     }
 }
