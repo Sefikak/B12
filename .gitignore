@@ -1,0 +1,8 @@
+.gradle/
+build/
+.kotlin/
+local.properties
+.idea/
+*.apk
+# imza anahtarı ve şifresi: yalnızca OneDrive'da, depoya girmez
+keystore/

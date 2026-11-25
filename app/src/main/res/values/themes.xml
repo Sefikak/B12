@@ -1,0 +1,8 @@
+<resources>
+    <style name="B12" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/b12_bg</item>
+        <item name="android:statusBarColor">@color/b12_bg</item>
+        <item name="android:navigationBarColor">@color/b12_bg</item>
+        <item name="android:colorAccent">@color/b12_accent</item>
+    </style>
+</resources>
