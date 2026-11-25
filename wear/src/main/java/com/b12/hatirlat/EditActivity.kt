@@ -18,27 +18,34 @@ class EditActivity : WearActivity() {
     private val times = mutableListOf<Int>()
     private var minutes = 0
     private var enabled = true
+    private var nag = true
+    private var nagMin = 15
 
     private lateinit var title: EditText
     private lateinit var dayRows: LinearLayout
     private lateinit var timeList: LinearLayout
     private lateinit var durText: TextView
     private lateinit var onBtn: TextView
+    private lateinit var nagBtn: TextView
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val existing = intent.getStringExtra("id")?.let { Store.get(this, it) }
         isNew = existing == null
-        base = existing ?: Reminder()
+        base = existing ?: Reminder(nag = true)
         days = base.days
         times.addAll(base.times.sorted())
         minutes = base.minutes
         enabled = base.enabled
+        nag = base.nag
+        nagMin = base.nagMin
         savedInstanceState?.let { s ->
             days = s.getInt("days", days)
             times.clear(); times.addAll(s.getIntArray("times")?.toList() ?: base.times)
             minutes = s.getInt("minutes", minutes)
             enabled = s.getBoolean("enabled", enabled)
+            nag = s.getBoolean("nag", nag)
+            nagMin = s.getInt("nagMin", nagMin)
         }
 
         val c = vbox().apply {
@@ -79,6 +86,15 @@ class EditActivity : WearActivity() {
         durRow.addView(step("+") { minutes = (minutes + 15).coerceAtMost(240); renderDur() })
         c.addView(durRow, lp())
 
+        c.addView(section("Yapana kadar"))
+        nagBtn = pill("", Ui.CARD, Ui.TEXT, 13) {
+            // Kapalı → 5 → 10 → 15 → 30 → 60 → Kapalı
+            val ch = Reminder.NAG_CHOICES
+            if (!nag) { nag = true; nagMin = ch.first() }
+            else { val i = ch.indexOf(nagMin); if (i < 0 || i == ch.lastIndex) nag = false else nagMin = ch[i + 1] }
+            renderOn()
+        }
+        c.addView(nagBtn, lp())
         onBtn = pill("", Ui.CARD, Ui.TEXT, 13) { enabled = !enabled; renderOn() }
         c.addView(onBtn, lp().also { it.topMargin = dp(12) })
         c.addView(pill("Kaydet", Ui.ACCENT, Ui.ON_ACCENT, 15) { save() }, lp().also { it.topMargin = dp(8) })
@@ -101,6 +117,8 @@ class EditActivity : WearActivity() {
         out.putIntArray("times", times.toIntArray())
         out.putInt("minutes", minutes)
         out.putBoolean("enabled", enabled)
+        out.putBoolean("nag", nag)
+        out.putInt("nagMin", nagMin)
     }
 
     private fun section(t: String) = label(t, 12, Ui.DIM, bold = true).apply {
@@ -151,6 +169,8 @@ class EditActivity : WearActivity() {
     private fun renderOn() {
         onBtn.text = if (enabled) "● Açık" else "○ Kapalı"
         onBtn.setTextColor(if (enabled) Ui.ACCENT else Ui.DIM)
+        nagBtn.text = if (nag) "↻ Her $nagMin dk" else "Kapalı"
+        nagBtn.setTextColor(if (nag) Ui.ACCENT else Ui.DIM)
     }
 
     private fun pick(index: Int, initial: Int) {
@@ -182,7 +202,7 @@ class EditActivity : WearActivity() {
             Toast.makeText(this, err, Toast.LENGTH_SHORT).show()
             return
         }
-        Store.save(this, base.copy(title = t, days = days, times = times.toList(), minutes = minutes, enabled = enabled))
+        Store.save(this, base.copy(title = t, days = days, times = times.toList(), minutes = minutes, enabled = enabled, nag = nag, nagMin = nagMin))
         finish()
     }
 }

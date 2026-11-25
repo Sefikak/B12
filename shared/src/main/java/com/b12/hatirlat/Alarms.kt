@@ -16,6 +16,7 @@ object Alarms {
     const val DONE = "com.b12.hatirlat.DONE"
     const val SNOOZE = "com.b12.hatirlat.SNOOZE"
     const val START = "com.b12.hatirlat.START"
+    const val DISMISSED = "com.b12.hatirlat.DISMISSED"
     const val SNOOZE_MIN = 10
 
     private fun am(ctx: Context) = ctx.getSystemService(AlarmManager::class.java)
@@ -40,8 +41,20 @@ object Alarms {
         setExact(ctx, at, pending(ctx, i))
     }
 
-    fun later(ctx: Context, id: String, at: Long, action: String) {
-        setExact(ctx, at, pending(ctx, intent(ctx, action, id).putExtra("at", at)))
+    /** [occ]: bildirimin ait olduğu asıl çalma anı (XP anahtarı ve gösterilen saat). */
+    fun later(ctx: Context, id: String, at: Long, action: String, occ: Long = at) {
+        setExact(ctx, at, pending(ctx, intent(ctx, action, id).putExtra("at", at).putExtra("occ", occ)))
+    }
+
+    /** Bu çalma için ısrar sürsün mü: yapılmadıysa, aynı gün içindeyse ve sıradaki saat henüz gelmediyse. */
+    fun stillDue(ctx: Context, r: Reminder, occ: Long, now: Long = System.currentTimeMillis()): Boolean {
+        if (r.deleted || !r.enabled || Progress.has(ctx, r.id, occ)) return false
+        val next = r.nextAfter(occ)
+        if (next != null && next <= now) return false
+        val a = java.util.Calendar.getInstance().apply { timeInMillis = occ }
+        val b = java.util.Calendar.getInstance().apply { timeInMillis = now }
+        return a.get(java.util.Calendar.DAY_OF_YEAR) == b.get(java.util.Calendar.DAY_OF_YEAR) &&
+            a.get(java.util.Calendar.YEAR) == b.get(java.util.Calendar.YEAR)
     }
 
     fun cancelLater(ctx: Context, id: String) {
@@ -51,6 +64,8 @@ object Alarms {
     fun rescheduleAll(ctx: Context) {
         Store.all(ctx).forEach { schedule(ctx, it) }
     }
+
+    fun snoozeMin(r: Reminder?) = if (r != null && r.nag) r.nagMin else SNOOZE_MIN
 
     fun canExact(ctx: Context) = Build.VERSION.SDK_INT < 31 || am(ctx).canScheduleExactAlarms()
 
@@ -67,28 +82,33 @@ class AlarmReceiver : BroadcastReceiver() {
         val r = Store.get(ctx, id)
         val now = System.currentTimeMillis()
         val at = i.getLongExtra("at", now)
+        val occ = i.getLongExtra("occ", at)
         when (i.action) {
             Alarms.FIRE -> if (r != null && r.enabled && !r.deleted) {
                 // Telefon kapalıyken kaçan hatırlatmayı saatler sonra çalma.
                 if (now - at < 30 * 60_000L && !Progress.has(ctx, r.id, at)) Notifier.remind(ctx, r, at)
                 Alarms.schedule(ctx, r, maxOf(now, at))
             }
-            Alarms.SNOOZED -> if (r != null && !r.deleted) Notifier.remind(ctx, r, at)
+            Alarms.SNOOZED -> if (r != null && Alarms.stillDue(ctx, r, occ, now)) Notifier.remind(ctx, r, occ)
+            Alarms.DISMISSED -> if (r != null && r.nag && Alarms.stillDue(ctx, r, occ, now)) {
+                // Kaydırılıp kapatıldı: yapılmadıysa birazdan geri gelsin.
+                Alarms.later(ctx, id, now + r.nagMin * 60_000L, Alarms.SNOOZED, occ)
+            }
             Alarms.ENDED -> if (r != null && !r.deleted) {
                 val xp = Progress.record(ctx, r, at, Progress.Kind.TIMER, toast = false)
                 Notifier.ended(ctx, r, xp)
             }
             Alarms.DONE -> {
                 Notifier.cancel(ctx, id)
-                if (r != null && i.hasExtra("at")) Progress.record(ctx, r, at)
+                if (r != null && i.hasExtra("at")) Progress.record(ctx, r, occ)
                 Alarms.cancelLater(ctx, id)
                 relay(ctx, "/n/done", id)
             }
             Alarms.SNOOZE -> {
-                val t = now + Alarms.SNOOZE_MIN * 60_000L
+                val t = now + Alarms.snoozeMin(r) * 60_000L
                 Notifier.cancel(ctx, id)
-                Alarms.later(ctx, id, t, Alarms.SNOOZED)
-                relay(ctx, "/n/snooze", "$id|$t")
+                Alarms.later(ctx, id, t, Alarms.SNOOZED, occ)
+                relay(ctx, "/n/snooze", "$id|$t|$occ")
             }
             Alarms.START -> if (r != null && r.minutes > 0) {
                 val t = now + r.minutes * 60_000L

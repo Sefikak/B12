@@ -164,6 +164,7 @@ class SyncService : WearableListenerService() {
         val parts = String(m.data).split("|")
         val id = parts[0]
         val at = parts.getOrNull(1)?.toLongOrNull() ?: 0L
+        val occ = parts.getOrNull(2)?.toLongOrNull() ?: at
         when (m.path) {
             "/n/done" -> {
                 Notifier.cancel(this, id)
@@ -171,7 +172,7 @@ class SyncService : WearableListenerService() {
             }
             "/n/snooze" -> {
                 Notifier.cancel(this, id)
-                Alarms.later(this, id, at, Alarms.SNOOZED)
+                Alarms.later(this, id, at, Alarms.SNOOZED, occ)
             }
             "/n/start" -> {
                 val r = Store.get(this, id) ?: return

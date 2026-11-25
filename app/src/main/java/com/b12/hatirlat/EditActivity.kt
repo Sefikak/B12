@@ -5,6 +5,7 @@ import android.app.AlertDialog
 import android.app.TimePickerDialog
 import android.os.Bundle
 import android.text.InputType
+import android.view.View
 import android.view.Gravity
 import android.widget.EditText
 import android.widget.HorizontalScrollView
@@ -23,6 +24,8 @@ class EditActivity : Activity() {
     private val times = mutableListOf<Int>()
     private var minutes = 0
     private var enabled = true
+    private var nag = true
+    private var nagMin = 15
     private var spreadCount = 4
     private var spreadStart = 9 * 60
     private var spreadEnd = 21 * 60
@@ -33,21 +36,27 @@ class EditActivity : Activity() {
     private lateinit var durText: TextView
     private lateinit var spreadText: TextView
     private lateinit var spreadRange: LinearLayout
+    private lateinit var nagChips: LinearLayout
+    private lateinit var nagHint: TextView
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val existing = intent.getStringExtra("id")?.let { Store.get(this, it) }
         isNew = existing == null
-        base = existing ?: Reminder()
+        base = existing ?: Reminder(nag = true)
         days = base.days
         times.addAll(base.times.sorted())
         minutes = base.minutes
         enabled = base.enabled
+        nag = base.nag
+        nagMin = base.nagMin
         savedInstanceState?.let { st ->
             days = st.getInt("days", days)
             times.clear(); times.addAll(st.getIntArray("times")?.toList() ?: base.times)
             minutes = st.getInt("minutes", minutes)
             enabled = st.getBoolean("enabled", enabled)
+            nag = st.getBoolean("nag", nag)
+            nagMin = st.getInt("nagMin", nagMin)
         }
 
         val c = vbox().apply { setPadding(dp(20), dp(14), dp(20), dp(40)) }
@@ -141,6 +150,26 @@ class EditActivity : Activity() {
             setPadding(dp(4), dp(6), dp(4), 0)
         })
 
+        // Yapana kadar hatırlat
+        c.addView(section("Yapana kadar hatırlat"))
+        val nagBox = vbox().apply {
+            background = rounded(Ui.CARD, 16)
+            setPadding(dp(16), dp(10), dp(12), dp(14))
+        }
+        val nagRow = hbox()
+        nagRow.addView(label("✓ diyene kadar bildirimde kalsın", 16), lp(0, weight = 1f))
+        nagRow.addView(Switch(this).apply {
+            isChecked = nag
+            styleSwitch(this)
+            setOnCheckedChangeListener { _, on -> nag = on; renderNag() }
+        })
+        nagBox.addView(nagRow)
+        nagHint = label("", 13, Ui.DIM).apply { setPadding(0, dp(8), 0, dp(8)) }
+        nagBox.addView(nagHint)
+        nagChips = hbox()
+        nagBox.addView(nagChips)
+        c.addView(nagBox)
+
         // Açık / kapalı
         val onRow = hbox().apply {
             background = rounded(Ui.CARD, 16)
@@ -175,7 +204,7 @@ class EditActivity : Activity() {
             WindowInsetsCompat.CONSUMED
         }
         setContentView(scroll)
-        renderDays(); renderTimes(); renderDur(); renderSpread()
+        renderDays(); renderTimes(); renderDur(); renderSpread(); renderNag()
     }
 
     override fun onSaveInstanceState(out: Bundle) {
@@ -184,6 +213,8 @@ class EditActivity : Activity() {
         out.putIntArray("times", times.toIntArray())
         out.putInt("minutes", minutes)
         out.putBoolean("enabled", enabled)
+        out.putBoolean("nag", nag)
+        out.putInt("nagMin", nagMin)
     }
 
     private fun section(t: String) = label(t, 14, Ui.DIM, bold = true).apply { setPadding(dp(4), dp(22), 0, dp(8)) }
@@ -233,6 +264,18 @@ class EditActivity : Activity() {
         }
     }
 
+    private fun renderNag() {
+        nagHint.text = if (nag) "Kaydırıp kapatırsan şu kadar sonra tekrar gelir:" else "Kapalı: bildirimi kaydırınca bir daha gelmez."
+        nagChips.removeAllViews()
+        nagChips.visibility = if (nag) View.VISIBLE else View.GONE
+        for (m in Reminder.NAG_CHOICES) {
+            val on = m == nagMin
+            nagChips.addView(pill("$m dk", if (on) Ui.ACCENT else Ui.CARD2, if (on) Ui.ON_ACCENT else Ui.TEXT, 13, 0, 8) {
+                nagMin = m; renderNag()
+            }, lp(0, weight = 1f).also { it.setMargins(dp(3), 0, dp(3), 0) })
+        }
+    }
+
     private fun renderDur() {
         durText.text = if (minutes == 0) "Süre yok" else Reminder.durText(minutes)
     }
@@ -261,7 +304,7 @@ class EditActivity : Activity() {
             times.isEmpty() -> return toast("En az bir saat ekle")
             days == 0 -> return toast("En az bir gün seç")
         }
-        Store.save(this, base.copy(title = t, days = days, times = times.toList(), minutes = minutes, enabled = enabled))
+        Store.save(this, base.copy(title = t, days = days, times = times.toList(), minutes = minutes, enabled = enabled, nag = nag, nagMin = nagMin))
         finish()
     }
 

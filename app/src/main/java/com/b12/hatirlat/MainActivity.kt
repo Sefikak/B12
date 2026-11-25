@@ -182,7 +182,7 @@ class MainActivity : Activity() {
         val fg = if (r.enabled) Ui.TEXT else Ui.DIM
         texts.addView(label(r.title.ifBlank { "Adsız" }, 17, fg, bold = true))
         texts.addView(label(r.timesText(), 15, if (r.enabled) Ui.ACCENT else Ui.DIM).apply { setPadding(0, dp(3), 0, 0) })
-        val meta = listOf(r.daysText(), r.durationText()).filter { it.isNotEmpty() }.joinToString(" · ")
+        val meta = listOf(r.daysText(), r.durationText(), if (r.nag) "↻ ${r.nagMin} dk" else "").filter { it.isNotEmpty() }.joinToString(" · ")
         texts.addView(label(meta, 13, Ui.DIM).apply { setPadding(0, dp(2), 0, 0) })
         c.addView(texts, lp(0, weight = 1f))
         val (done, total) = Progress.today(this, r)

@@ -102,6 +102,7 @@ object Progress {
         }
         if (added) {
             Notifier.cancel(ctx, d.rid)
+            Alarms.cancelLater(ctx, d.rid)
             Store.notifyChanged()
         }
         return added
@@ -196,6 +197,7 @@ object Progress {
     fun markNow(ctx: Context, r: Reminder): Boolean {
         val at = slotToMark(ctx, r) ?: return false
         Notifier.cancel(ctx, r.id)
+        Alarms.cancelLater(ctx, r.id)
         record(ctx, r, at)
         return true
     }

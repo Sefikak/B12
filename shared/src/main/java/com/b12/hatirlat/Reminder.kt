@@ -19,11 +19,15 @@ data class Reminder(
     val enabled: Boolean = true,
     val updatedAt: Long = 0L,
     val deleted: Boolean = false,
+    /** Yapana kadar hatırlat: bildirim ✓'ye kadar kalır, kaydırılırsa nagMin dakika sonra geri gelir. */
+    val nag: Boolean = false,
+    val nagMin: Int = 15,
 ) {
     fun toJson(): JSONObject = JSONObject()
         .put("id", id).put("title", title).put("days", days)
         .put("times", JSONArray(times)).put("minutes", minutes)
         .put("enabled", enabled).put("updatedAt", updatedAt).put("deleted", deleted)
+        .put("nag", nag).put("nagMin", nagMin)
 
     fun hasDay(i: Int) = days and (1 shl i) != 0
 
@@ -85,6 +89,7 @@ data class Reminder(
         const val WEEKDAYS = 0x1F
         const val WEEKEND = 0x60
         val DAY_SHORT = listOf("Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz")
+        val NAG_CHOICES = listOf(5, 10, 15, 30, 60)
         val DAY_LETTER = listOf("Pt", "Sa", "Ça", "Pe", "Cu", "Ct", "Pz")
 
         private val ICONS = listOf(
@@ -136,6 +141,8 @@ data class Reminder(
                 enabled = o.optBoolean("enabled", true),
                 updatedAt = o.optLong("updatedAt"),
                 deleted = o.optBoolean("deleted"),
+                nag = o.optBoolean("nag"),
+                nagMin = o.optInt("nagMin", 15).coerceIn(1, 240),
             )
         }
 
@@ -155,6 +162,6 @@ data class Reminder(
             Reminder(title = "Su iç", times = spread(5, 9 * 60, 21 * 60)),
             Reminder(title = "İlaç / vitamin", times = listOf(9 * 60)),
             Reminder(title = "Spor", days = 0b0010101, times = listOf(18 * 60), minutes = 45),
-        )
+        ).map { it.copy(nag = true) }
     }
 }

@@ -36,7 +36,7 @@ object Notifier {
     }
 
     private fun action(ctx: Context, act: String, id: String, at: Long? = null) =
-        Alarms.pending(ctx, Alarms.intent(ctx, act, id).also { if (at != null) it.putExtra("at", at) })
+        Alarms.pending(ctx, Alarms.intent(ctx, act, id).also { if (at != null) it.putExtra("at", at).putExtra("occ", at) })
 
     private fun base(ctx: Context, r: Reminder, ch: String) = NotificationCompat.Builder(ctx, ch)
         .setSmallIcon(R.drawable.ic_b12)
@@ -51,18 +51,20 @@ object Notifier {
         ensure(ctx)
         val c = Calendar.getInstance().apply { timeInMillis = at }
         val time = Reminder.hm(c.get(Calendar.HOUR_OF_DAY) * 60 + c.get(Calendar.MINUTE))
-        val text = if (r.minutes > 0) "$time · ${r.durationText()}" else time
+        var text = if (r.minutes > 0) "$time · ${r.durationText()}" else time
+        if (r.nag) text += " · yapana kadar"
         val b = base(ctx, r, CH)
             .setContentText(text)
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setVibrate(VIBE)
-            .setAutoCancel(true)
+            .setAutoCancel(!r.nag)
             .setWhen(at)
             .setShowWhen(true)
+            .setDeleteIntent(action(ctx, Alarms.DISMISSED, r.id, at))
         if (r.minutes > 0) b.addAction(0, "Başla (${r.durationText()})", action(ctx, Alarms.START, r.id))
         b.addAction(0, "Yaptım ✓", action(ctx, Alarms.DONE, r.id, at))
-            .addAction(0, "${Alarms.SNOOZE_MIN} dk ertele", action(ctx, Alarms.SNOOZE, r.id))
+            .addAction(0, "${Alarms.snoozeMin(r)} dk ertele", action(ctx, Alarms.SNOOZE, r.id, at))
         post(ctx, r.id, b)
     }
 
