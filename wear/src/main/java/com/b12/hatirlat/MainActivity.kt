@@ -61,7 +61,7 @@ class MainActivity : WearActivity() {
     private fun render() {
         val s = Progress.stats(this)
         level.removeAllViews()
-        level.addView(label("Sv ${s.level} · ${s.title}" + if (s.streak > 0) "  🔥${s.streak}" else "", 13, Ui.TEXT, bold = true).apply { gravity = Gravity.CENTER }, lp())
+        level.addView(label("Sv ${s.level} · ${s.title}" + (if (s.streak > 0) "  🔥${s.streak}" else "") + if (s.freezes > 0) " 🧊${s.freezes}" else "", 13, Ui.TEXT, bold = true).apply { gravity = Gravity.CENTER }, lp())
         level.addView(bar(s.into.toFloat() / s.need, 5), lp().also { it.setMargins(dp(14), dp(4), dp(14), 0) })
         level.addView(label("${s.into}/${s.need} XP", 10, Ui.DIM).apply { gravity = Gravity.CENTER }, lp())
         list.removeAllViews()
@@ -85,7 +85,12 @@ class MainActivity : WearActivity() {
             texts.addView(label("${r.icon()} ${r.title.ifBlank { "Adsız" }}", 15, if (r.enabled) Ui.TEXT else Ui.DIM, bold = true).apply {
                 maxLines = 2
             })
-            texts.addView(label(r.nextText(), 12, if (r.enabled) Ui.ACCENT else Ui.DIM))
+            val sub = listOfNotNull(
+                r.nextText(),
+                if (r.weekly > 0) "hafta ${Progress.weekTicks(this, r).coerceAtMost(r.weekly)}/${r.weekly}" else null,
+                Progress.habitStreak(this, r).takeIf { it >= 2 }?.let { "🔥$it" },
+            ).joinToString(" · ")
+            texts.addView(label(sub, 12, if (r.enabled) Ui.ACCENT else Ui.DIM))
             row.addView(texts, lp(0, weight = 1f))
             val (done, total) = Progress.today(this, r)
             if (total > 0) row.addView(checkButton(done, total, 38) {

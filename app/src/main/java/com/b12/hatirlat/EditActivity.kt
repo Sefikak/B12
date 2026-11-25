@@ -28,6 +28,15 @@ class EditActivity : Activity() {
     private var nagMin = 15
     private var target = 0
     private lateinit var goalText: TextView
+    /** 0 = seçili günler, 1 = haftada X kez, 2 = tek sefer */
+    private var mode = 0
+    private var weekly = 3
+    private var onceDay = 0L
+    private val steps = mutableListOf<String>()
+    private lateinit var modeRow: LinearLayout
+    private lateinit var modeBody: LinearLayout
+    private lateinit var stepList: LinearLayout
+    private lateinit var note: EditText
     private var spreadCount = 4
     private var spreadStart = 9 * 60
     private var spreadEnd = 21 * 60
@@ -53,7 +62,15 @@ class EditActivity : Activity() {
         nag = base.nag
         nagMin = base.nagMin
         target = base.target
+        mode = when { base.isOnce -> 2; base.weekly > 0 -> 1; else -> 0 }
+        if (base.weekly > 0) weekly = base.weekly
+        onceDay = if (base.isOnce) base.onceDay else Reminder.epochDay(java.util.Calendar.getInstance())
+        steps.addAll(base.steps)
         savedInstanceState?.let { st ->
+            mode = st.getInt("mode", mode)
+            weekly = st.getInt("weekly", weekly)
+            onceDay = st.getLong("onceDay", onceDay)
+            st.getStringArrayList("steps")?.let { steps.clear(); steps.addAll(it) }
             days = st.getInt("days", days)
             times.clear(); times.addAll(st.getIntArray("times")?.toList() ?: base.times)
             minutes = st.getInt("minutes", minutes)
@@ -98,15 +115,13 @@ class EditActivity : Activity() {
             }, lp().also { it.topMargin = dp(10) })
         }
 
-        // Günler
-        c.addView(section("Hangi günler?"))
+        // Tekrar türü
+        c.addView(section("Ne sıklıkla?"))
+        modeRow = hbox()
+        c.addView(modeRow)
+        modeBody = vbox()
+        c.addView(modeBody, lp().also { it.topMargin = dp(10) })
         dayRow = hbox()
-        c.addView(dayRow)
-        val quick = hbox()
-        for ((t, mask) in listOf("Her gün" to Reminder.ALL_DAYS, "Hafta içi" to Reminder.WEEKDAYS, "Hafta sonu" to Reminder.WEEKEND)) {
-            quick.addView(pill(t, Ui.CARD, Ui.TEXT, 13, 12, 7) { days = mask; renderDays() }, lp(LinearLayout.LayoutParams.WRAP_CONTENT).also { it.rightMargin = dp(8) })
-        }
-        c.addView(quick, lp().also { it.topMargin = dp(10) })
 
         // Saatler
         c.addView(section("Saat kaçta? (günde kaç kez)"))
@@ -137,6 +152,18 @@ class EditActivity : Activity() {
             times.addAll(Reminder.spread(spreadCount, spreadStart, spreadEnd))
             renderTimes()
         }, lp().also { it.topMargin = dp(10) })
+        spread.addView(label("ya da her … bir (yukarıdaki saatler arasında)", 13, Ui.DIM).apply { setPadding(0, dp(12), 0, dp(6)) })
+        val every = hbox()
+        for ((t, m) in listOf("30 dk" to 30, "1 sa" to 60, "2 sa" to 120, "3 sa" to 180, "4 sa" to 240)) {
+            every.addView(pill(t, Ui.CARD2, Ui.TEXT, 13, 0, 8) {
+                val end = if (spreadEnd > spreadStart) spreadEnd else spreadEnd + 1440
+                times.clear()
+                var x = spreadStart
+                while (x <= end && times.size < 48) { times.add(x % 1440); x += m }
+                renderTimes()
+            }, lp(0, weight = 1f).also { it.setMargins(dp(3), 0, dp(3), 0) })
+        }
+        spread.addView(every)
         c.addView(spread, lp().also { it.topMargin = dp(12) })
 
         // Günlük tik hedefi
@@ -151,6 +178,26 @@ class EditActivity : Activity() {
         goalRow.addView(stepBtn("+") { stepGoal(+1) })
         c.addView(goalRow)
         c.addView(label("Hedefe ulaşınca o günün kalan bildirimleri ve ısrar durur. Saat sayısından fazla seçersen fazlası karttaki ✓ ile atılır.", 13, Ui.DIM).apply {
+            setPadding(dp(4), dp(6), dp(4), 0)
+        })
+
+        // Not ve alt adımlar
+        c.addView(section("Not ve alt adımlar (isteğe bağlı)"))
+        note = EditText(this).apply {
+            setText(base.note)
+            hint = "Not, ör. 2 dakika, diş ipi de"
+            setHintTextColor(Ui.DIM)
+            setTextColor(Ui.TEXT)
+            textSize = 15f
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES or InputType.TYPE_TEXT_FLAG_MULTI_LINE
+            background = rounded(Ui.CARD, 14)
+            setPadding(dp(16), dp(12), dp(16), dp(12))
+        }
+        c.addView(note)
+        stepList = vbox()
+        c.addView(stepList, lp().also { it.topMargin = dp(8) })
+        c.addView(pill("+ Alt adım ekle", Ui.CARD, Ui.ACCENT, 14) { addStep() }, lp().also { it.topMargin = dp(4) })
+        c.addView(label("Alt adımlar kartta kontrol listesi olur; hepsini işaretleyince tik kendiliğinden atılır.", 13, Ui.DIM).apply {
             setPadding(dp(4), dp(6), dp(4), 0)
         })
 
@@ -223,7 +270,7 @@ class EditActivity : Activity() {
             WindowInsetsCompat.CONSUMED
         }
         setContentView(scroll)
-        renderDays(); renderTimes(); renderDur(); renderSpread(); renderNag()
+        renderMode(); renderTimes(); renderDur(); renderSpread(); renderNag(); renderSteps()
     }
 
     override fun onSaveInstanceState(out: Bundle) {
@@ -235,6 +282,10 @@ class EditActivity : Activity() {
         out.putBoolean("nag", nag)
         out.putInt("nagMin", nagMin)
         out.putInt("target", target)
+        out.putInt("mode", mode)
+        out.putInt("weekly", weekly)
+        out.putLong("onceDay", onceDay)
+        out.putStringArrayList("steps", ArrayList(steps))
     }
 
     private fun section(t: String) = label(t, 14, Ui.DIM, bold = true).apply { setPadding(dp(4), dp(22), 0, dp(8)) }
@@ -251,6 +302,68 @@ class EditActivity : Activity() {
         times.clear(); times.addAll(p.times)
         minutes = p.minutes
         renderDays(); renderTimes(); renderDur()
+    }
+
+    private fun renderMode() {
+        modeRow.removeAllViews()
+        for ((i, t) in listOf("Seçili günler", "Haftada X kez", "Tek sefer").withIndex()) {
+            val on = i == mode
+            modeRow.addView(pill(t, if (on) Ui.ACCENT else Ui.CARD, if (on) Ui.ON_ACCENT else Ui.TEXT, 13, 6, 9) { mode = i; renderMode() },
+                lp(0, weight = 1f).also { it.setMargins(dp(3), 0, dp(3), 0) })
+        }
+        modeBody.removeAllViews()
+        (dayRow.parent as? LinearLayout)?.removeView(dayRow)
+        when (mode) {
+            0, 1 -> {
+                if (mode == 1) {
+                    val wr = hbox().apply {
+                        background = rounded(Ui.CARD, 16)
+                        setPadding(dp(12), dp(8), dp(12), dp(8))
+                    }
+                    wr.addView(stepBtn("−") { weekly = (weekly - 1).coerceAtLeast(1); renderMode() })
+                    wr.addView(label("Haftada $weekly kez", 17, Ui.TEXT, bold = true).apply { gravity = Gravity.CENTER }, lp(0, weight = 1f))
+                    wr.addView(stepBtn("+") { weekly = (weekly + 1).coerceAtMost(7); renderMode() })
+                    modeBody.addView(wr)
+                    modeBody.addView(label("Aşağıdaki günlerde hatırlatır; haftalık sayı dolunca o hafta susar.", 13, Ui.DIM).apply { setPadding(dp(4), dp(8), dp(4), dp(8)) })
+                }
+                modeBody.addView(dayRow)
+                val quick = hbox()
+                for ((t, mask) in listOf("Her gün" to Reminder.ALL_DAYS, "Hafta içi" to Reminder.WEEKDAYS, "Hafta sonu" to Reminder.WEEKEND)) {
+                    quick.addView(pill(t, Ui.CARD, Ui.TEXT, 13, 12, 7) { days = mask; renderDays() }, lp(LinearLayout.LayoutParams.WRAP_CONTENT).also { it.rightMargin = dp(8) })
+                }
+                modeBody.addView(quick, lp().also { it.topMargin = dp(10) })
+                renderDays()
+            }
+            2 -> {
+                val d = java.time.LocalDate.ofEpochDay(onceDay)
+                modeBody.addView(pill("📅  ${d.dayOfMonth} ${Reminder.MONTHS[d.monthValue - 1]} ${d.year}", Ui.CARD, Ui.TEXT, 16) {
+                    android.app.DatePickerDialog(this, { _, y, m, day ->
+                        onceDay = java.time.LocalDate.of(y, m + 1, day).toEpochDay(); renderMode()
+                    }, d.year, d.monthValue - 1, d.dayOfMonth).show()
+                })
+                modeBody.addView(label("Yalnızca o gün, seçtiğin saatlerde hatırlatır.", 13, Ui.DIM).apply { setPadding(dp(4), dp(8), dp(4), 0) })
+            }
+        }
+    }
+
+    private fun addStep() {
+        val e = EditText(this).apply { hint = "ör. Şınav ×20"; setTextColor(Ui.TEXT); setHintTextColor(Ui.DIM) }
+        AlertDialog.Builder(this).setTitle("Alt adım").setView(e)
+            .setPositiveButton("Ekle") { _, _ -> e.text.toString().trim().takeIf { it.isNotEmpty() }?.let { steps.add(it); renderSteps() } }
+            .setNegativeButton("Vazgeç", null).show()
+    }
+
+    private fun renderSteps() {
+        stepList.removeAllViews()
+        for ((i, s) in steps.withIndex()) {
+            val row = hbox().apply {
+                background = rounded(Ui.CARD, 14)
+                setPadding(dp(16), dp(4), dp(6), dp(4))
+            }
+            row.addView(label("☐  $s", 15), lp(0, weight = 1f))
+            row.addView(pill("✕", Ui.CARD, Ui.DIM, 14, 12, 6) { steps.removeAt(i); renderSteps() })
+            stepList.addView(row, lp().also { it.bottomMargin = dp(6) })
+        }
     }
 
     private fun renderDays() {
@@ -336,9 +449,13 @@ class EditActivity : Activity() {
         when {
             t.isEmpty() -> return toast("Bir ad yaz")
             times.isEmpty() -> return toast("En az bir saat ekle")
-            days == 0 -> return toast("En az bir gün seç")
+            mode != 2 && days == 0 -> return toast("En az bir gün seç")
         }
-        Store.save(this, base.copy(title = t, days = days, times = times.toList(), minutes = minutes, enabled = enabled, nag = nag, nagMin = nagMin, target = target))
+        Store.save(this, base.copy(
+            title = t, days = days, times = times.toList(), minutes = minutes, enabled = enabled, nag = nag, nagMin = nagMin, target = target,
+            weekly = if (mode == 1) weekly else 0, onceDay = if (mode == 2) onceDay else 0L,
+            note = note.text.toString().trim(), steps = steps.toList(),
+        ))
         finish()
     }
 

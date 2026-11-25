@@ -17,7 +17,14 @@ object Store {
     fun addListener(l: () -> Unit) = listeners.add(l)
     fun removeListener(l: () -> Unit) = listeners.remove(l)
 
-    private fun prefs(ctx: Context) = ctx.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+    /** Uygulamaya özel ek yenileme (telefonda widget, saatte Tile ve kadran). Application.onCreate'te atanır. */
+    @Volatile var onChangeHook: ((Context) -> Unit)? = null
+    @Volatile private var app: Context? = null
+
+    private fun prefs(ctx: Context): android.content.SharedPreferences {
+        app = ctx.applicationContext
+        return ctx.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+    }
 
     private fun read(ctx: Context): MutableList<Reminder> {
         val s = prefs(ctx).getString(KEY, null) ?: return mutableListOf()
@@ -84,6 +91,9 @@ object Store {
     }
 
     fun notifyChanged() {
-        main.post { listeners.forEach { it() } }
+        main.post {
+            listeners.forEach { it() }
+            app?.let { a -> try { onChangeHook?.invoke(a) } catch (_: Exception) {} }
+        }
     }
 }

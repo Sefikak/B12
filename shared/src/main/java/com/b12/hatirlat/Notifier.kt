@@ -53,8 +53,16 @@ object Notifier {
         val time = Reminder.hm(c.get(Calendar.HOUR_OF_DAY) * 60 + c.get(Calendar.MINUTE))
         var text = if (r.minutes > 0) "$time · ${r.durationText()}" else time
         if (r.nag) text += " · yapana kadar"
+        val quiet = Settings.get(ctx).isQuiet(System.currentTimeMillis())
+        val big = buildString {
+            append(text)
+            if (r.note.isNotBlank()) append('\n').append(r.note)
+            for (s in r.steps) append('\n').append("• ").append(s)
+        }
         val b = base(ctx, r, CH)
             .setContentText(text)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(big))
+            .setSilent(quiet)
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setVibrate(VIBE)
@@ -111,6 +119,23 @@ object Notifier {
     }
 
     private const val LEVEL_ID = 0x0B12
+
+    fun badge(ctx: Context, b: Badge) {
+        ensure(ctx)
+        val n = NotificationCompat.Builder(ctx, CH)
+            .setSmallIcon(R.drawable.ic_b12)
+            .setColor(0xFF8AB4FF.toInt())
+            .setContentTitle("${b.icon} Yeni rozet: ${b.name}")
+            .setContentText(b.desc)
+            .setContentIntent(openApp(ctx))
+            .setAutoCancel(true)
+            .setSilent(Settings.get(ctx).isQuiet(System.currentTimeMillis()))
+            .setLocalOnly(isWatch(ctx) || Sync.peerHasApp(ctx))
+        try {
+            NotificationManagerCompat.from(ctx).notify(b.id.hashCode(), n.build())
+        } catch (_: SecurityException) {
+        }
+    }
 
     fun cancel(ctx: Context, id: String) = NotificationManagerCompat.from(ctx).cancel(nid(id))
 

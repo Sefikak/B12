@@ -24,27 +24,48 @@ data class Reminder(
     val nagMin: Int = 15,
     /** Günde kaç tik gerekir; 0 = saat sayısı kadar. */
     val target: Int = 0,
+    /** Haftada kaç kez (0 = kapalı). Açıksa seçili günlerde hatırlatır, haftalık sayı dolunca susar. */
+    val weekly: Int = 0,
+    /** Tek seferlik: LocalDate.toEpochDay(); 0 = tekrar eden. */
+    val onceDay: Long = 0L,
+    val note: String = "",
+    /** Alt adımlar (kontrol listesi); hepsi işaretlenince tik atılır. */
+    val steps: List<String> = emptyList(),
 ) {
     /** Geçerli günlük tik hedefi. */
-    val goal get() = if (target > 0) target else times.size.coerceAtLeast(1)
+    val goal get() = when {
+        target > 0 -> target
+        weekly > 0 -> 1
+        else -> times.size.coerceAtLeast(1)
+    }
+    val isOnce get() = onceDay > 0L
+
+    /** Bu takvim gününde hatırlatma var mı? */
+    fun activeOn(c: Calendar): Boolean = if (isOnce) epochDay(c) == onceDay else hasDay(dayIndex(c))
 
     fun toJson(): JSONObject = JSONObject()
         .put("id", id).put("title", title).put("days", days)
         .put("times", JSONArray(times)).put("minutes", minutes)
         .put("enabled", enabled).put("updatedAt", updatedAt).put("deleted", deleted)
         .put("nag", nag).put("nagMin", nagMin).put("target", target)
+        .put("weekly", weekly).put("onceDay", onceDay).put("note", note).put("steps", JSONArray(steps))
 
     fun hasDay(i: Int) = days and (1 shl i) != 0
 
     /** [from] anından sonraki ilk çalma anı; gün ya da saat yoksa null. */
     fun nextAfter(from: Long): Long? {
-        if (days and ALL_DAYS == 0 || times.isEmpty()) return null
+        if ((!isOnce && days and ALL_DAYS == 0) || times.isEmpty()) return null
         val sorted = times.sorted()
         val c = Calendar.getInstance()
-        for (d in 0..7) {
+        val range = if (isOnce) {
+            val diff = onceDay - epochDay(Calendar.getInstance().apply { timeInMillis = from })
+            if (diff < 0) return null
+            diff.toInt()..diff.toInt()
+        } else 0..7
+        for (d in range) {
             c.timeInMillis = from
             c.add(Calendar.DAY_OF_YEAR, d)
-            if (!hasDay(dayIndex(c))) continue
+            if (!activeOn(c)) continue
             for (t in sorted) {
                 c.set(Calendar.HOUR_OF_DAY, t / 60)
                 c.set(Calendar.MINUTE, t % 60)
@@ -56,7 +77,13 @@ data class Reminder(
         return null
     }
 
-    fun daysText(): String = when (days and ALL_DAYS) {
+    fun daysText(): String = when {
+        isOnce -> "Tek sefer · " + java.time.LocalDate.ofEpochDay(onceDay).let { "${it.dayOfMonth} ${MONTHS[it.monthValue - 1]}" }
+        weekly > 0 -> "Haftada $weekly kez" + if (days and ALL_DAYS != ALL_DAYS) " · " + repeatDaysText() else ""
+        else -> repeatDaysText()
+    }
+
+    private fun repeatDaysText(): String = when (days and ALL_DAYS) {
         ALL_DAYS -> "Her gün"
         WEEKDAYS -> "Hafta içi"
         WEEKEND -> "Hafta sonu"
@@ -77,7 +104,12 @@ data class Reminder(
     /** "Bugün 21:00", "Yarın 08:00", "Cum 08:00" */
     fun nextText(now: Long = System.currentTimeMillis()): String {
         if (!enabled) return "Kapalı"
-        val at = nextAfter(now) ?: return "Gün ya da saat yok"
+        val at = nextAfter(now) ?: return if (isOnce) "Geçti" else "Gün ya da saat yok"
+        return atText(at, now)
+    }
+
+    /** Verilen an için "Bugün 21:00" / "Yarın 08:00" / "Cum 08:00". */
+    fun atText(at: Long, now: Long = System.currentTimeMillis()): String {
         val c = Calendar.getInstance().apply { timeInMillis = at }
         val today = Calendar.getInstance().apply { timeInMillis = now }
         val diff = dayNumber(c) - dayNumber(today)
@@ -112,6 +144,11 @@ data class Reminder(
             listOf("temizl", "topla") to "🧹",
             listOf("gitar", "piyano", "müzik") to "🎸",
         )
+
+        val MONTHS = listOf("Oca", "Şub", "Mar", "Nis", "May", "Haz", "Tem", "Ağu", "Eyl", "Eki", "Kas", "Ara")
+
+        fun epochDay(c: Calendar): Long =
+            java.time.LocalDate.of(c.get(Calendar.YEAR), c.get(Calendar.MONTH) + 1, c.get(Calendar.DAY_OF_MONTH)).toEpochDay()
 
         fun dayIndex(c: Calendar) = (c.get(Calendar.DAY_OF_WEEK) + 5) % 7
         private fun dayNumber(c: Calendar) = c.get(Calendar.YEAR) * 400 + c.get(Calendar.DAY_OF_YEAR)
@@ -149,6 +186,10 @@ data class Reminder(
                 nag = o.optBoolean("nag"),
                 nagMin = o.optInt("nagMin", 15).coerceIn(1, 240),
                 target = o.optInt("target", 0).coerceIn(0, 50),
+                weekly = o.optInt("weekly", 0).coerceIn(0, 7),
+                onceDay = o.optLong("onceDay", 0L),
+                note = o.optString("note"),
+                steps = o.optJSONArray("steps")?.let { a -> List(a.length()) { a.getString(it) } } ?: emptyList(),
             )
         }
 

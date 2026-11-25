@@ -3,6 +3,7 @@
     <uses-feature android:name="android.hardware.type.watch" />
 
     <application
+        android:name=".B12WearApp"
         android:label="B12"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher"
@@ -18,5 +19,25 @@
         </activity>
         <activity android:name=".EditActivity" android:exported="false" />
         <activity android:name=".TimeActivity" android:exported="false" />
+
+        <!-- Kaydırınca açılan kart -->
+        <service android:name=".TodayTile" android:exported="true" android:label="B12 · Bugün"
+            android:permission="com.google.android.wearable.permission.BIND_TILE_PROVIDER">
+            <intent-filter>
+                <action android:name="androidx.wear.tiles.action.BIND_TILE_PROVIDER" />
+            </intent-filter>
+            <meta-data android:name="androidx.wear.tiles.PREVIEW" android:resource="@drawable/ic_launcher_fg" />
+        </service>
+
+        <!-- Kadran göstergesi -->
+        <service android:name=".TodayComplication" android:exported="true" android:label="B12"
+            android:icon="@drawable/ic_b12"
+            android:permission="com.google.android.wearable.permission.BIND_COMPLICATION_PROVIDER">
+            <intent-filter>
+                <action android:name="android.support.wearable.complications.ACTION_COMPLICATION_UPDATE_REQUEST" />
+            </intent-filter>
+            <meta-data android:name="android.support.wearable.complications.SUPPORTED_TYPES" android:value="SHORT_TEXT,RANGED_VALUE" />
+            <meta-data android:name="android.support.wearable.complications.UPDATE_PERIOD_SECONDS" android:value="900" />
+        </service>
     </application>
 </manifest>

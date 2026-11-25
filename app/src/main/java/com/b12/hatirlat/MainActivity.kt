@@ -10,7 +10,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.PowerManager
-import android.provider.Settings
+import android.provider.Settings as SysSettings
 import android.view.Gravity
 import android.view.View
 import android.widget.FrameLayout
@@ -48,8 +48,12 @@ class MainActivity : Activity() {
         val content = vbox().apply { setPadding(dp(20), dp(18), dp(20), dp(110)) }
         greet = label("", 28, Ui.TEXT, bold = true)
         date = label("", 15, Ui.DIM)
-        content.addView(greet)
-        content.addView(date)
+        val head = hbox()
+        head.addView(vbox().apply { addView(greet); addView(date) }, lp(0, weight = 1f))
+        head.addView(pill("📊", Ui.CARD, Ui.TEXT, 18, 12, 8) { startActivity(Intent(this, StatsActivity::class.java)) }.apply { contentDescription = "İstatistik" })
+        head.addView(pill("⚙", Ui.CARD, Ui.TEXT, 18, 12, 8) { startActivity(Intent(this, SettingsActivity::class.java)) }.apply { contentDescription = "Ayarlar" },
+            lp(LinearLayout.LayoutParams.WRAP_CONTENT).also { it.leftMargin = dp(8) })
+        content.addView(head)
         levelBox = vbox()
         content.addView(levelBox, lp().also { it.topMargin = dp(18) })
         hero = vbox()
@@ -162,7 +166,7 @@ class MainActivity : Activity() {
         hero.setPadding(dp(20), dp(16), dp(20), dp(18))
         hero.addView(label("SIRADAKİ · ${Reminder.untilText(at, now)}", 12, 0xB30F1216.toInt(), bold = true))
         hero.addView(label("${r.icon()}  ${r.title}", 22, Ui.ON_ACCENT, bold = true).apply { setPadding(0, dp(6), 0, 0) })
-        hero.addView(label(r.nextText(now) + if (r.minutes > 0) " · ${r.durationText()}" else "", 15, 0xCC0F1216.toInt()))
+        hero.addView(label(r.atText(at, now) + if (r.minutes > 0) " · ${r.durationText()}" else "", 15, 0xCC0F1216.toInt()))
         hero.setOnClickListener { startActivity(Intent(this, EditActivity::class.java).putExtra("id", r.id)) }
     }
 
@@ -192,9 +196,15 @@ class MainActivity : Activity() {
         texts.addView(timeChips(r), lp().also { it.topMargin = dp(6); it.bottomMargin = dp(2) })
         val meta = listOf(r.daysText(), r.durationText(), if (r.nag) "↻ ${r.nagMin} dk" else "").filter { it.isNotEmpty() }.joinToString(" · ")
         texts.addView(label(meta, 13, Ui.DIM).apply { setPadding(0, dp(2), 0, 0) })
+        if (r.note.isNotBlank()) texts.addView(label(r.note, 13, Ui.DIM).apply { setPadding(0, dp(2), 0, 0); maxLines = 2 })
         c.addView(texts, lp(0, weight = 1f))
         val (done, total) = Progress.today(this, r)
-        if (total > 0) texts.addView(label(if (done >= total) "Bugün tamam ✓" else "Bugün $done/$total tik", 12, if (done >= total) Ui.ACCENT else Ui.DIM, bold = true).apply { setPadding(0, dp(4), 0, 0) })
+        val parts = mutableListOf<String>()
+        if (r.weekly > 0) parts += "Bu hafta ${Progress.weekTicks(this, r).coerceAtMost(r.weekly)}/${r.weekly}"
+        if (total > 0) parts += if (done >= total) "Bugün tamam ✓" else "Bugün $done/$total tik"
+        Progress.habitStreak(this, r).takeIf { it >= 2 }?.let { parts += "🔥 $it gün" }
+        if (parts.isNotEmpty()) texts.addView(label(parts.joinToString(" · "), 12, if (total > 0 && done >= total) Ui.ACCENT else Ui.DIM, bold = true).apply { setPadding(0, dp(4), 0, 0) })
+        if (r.steps.isNotEmpty() && r.enabled) texts.addView(stepList(r), lp().also { it.topMargin = dp(6) })
         c.addView(checkButton(done, total, 48) {
             when {
                 total == 0 -> Toast.makeText(this, "Bugün bu hatırlatmanın günü değil", Toast.LENGTH_SHORT).show()
@@ -202,6 +212,22 @@ class MainActivity : Activity() {
             }
         })
         return c
+    }
+
+    /** Alt adımlar: dokununca işaretlenir, hepsi bitince tik atılır. */
+    private fun stepList(r: Reminder): View {
+        val box = vbox()
+        val mask = Steps.mask(this, r)
+        val dayDone = Progress.today(this, r).let { it.second > 0 && it.first >= it.second }
+        for ((i, s) in r.steps.withIndex()) {
+            val on = dayDone || mask and (1 shl i) != 0
+            box.addView(label((if (on) "☑  " else "☐  ") + s, 14, if (on) Ui.DIM else Ui.TEXT).apply {
+                setPadding(0, dp(3), 0, dp(3))
+                if (!dayDone) setOnClickListener { Steps.toggle(this@MainActivity, r, i) }
+                if (on) paintFlags = paintFlags or android.graphics.Paint.STRIKE_THRU_TEXT_FLAG
+            })
+        }
+        return box
     }
 
     /** Saatler ayrı ayrı: tiklenen dolu, vakti gelmiş olan çerçeveli, gelecek olan soluk. Dokununca o saat tiklenir. */
@@ -243,6 +269,8 @@ class MainActivity : Activity() {
         levelBox.removeAllViews()
         levelBox.background = rounded(Ui.CARD, 22)
         levelBox.setPadding(dp(16), dp(14), dp(16), dp(14))
+        levelBox.setOnClickListener { startActivity(Intent(this, StatsActivity::class.java)) }
+        levelBox.background = pressable(Ui.CARD, 22)
         val top = hbox()
         top.addView(label(s.level.toString(), 22, Ui.ACCENT, bold = true).apply {
             gravity = Gravity.CENTER
@@ -256,18 +284,26 @@ class MainActivity : Activity() {
         levelBox.addView(top)
 
         val bottom = hbox().apply { setPadding(0, dp(12), 0, 0) }
-        bottom.addView(label(if (s.streak > 0) "🔥 ${s.streak} gün seri" else "🔥 Seri yok", 14, if (s.streak > 0) Ui.TEXT else Ui.DIM, bold = true), lp(0, weight = 1f))
+        bottom.addView(vbox().apply {
+            addView(label(if (s.streak > 0) "🔥 ${s.streak} gün seri" else "🔥 Seri yok", 14, if (s.streak > 0) Ui.TEXT else Ui.DIM, bold = true))
+            if (s.freezes > 0) addView(label("🧊 ${s.freezes} seri koruyucu", 11, Ui.DIM))
+        }, lp(0, weight = 1f))
         val cal = Calendar.getInstance()
         for (i in 0..6) {
             val d = Calendar.getInstance().apply { timeInMillis = cal.timeInMillis; add(Calendar.DAY_OF_YEAR, i - 6) }
-            val on = s.week[i]
-            bottom.addView(label(Reminder.DAY_LETTER[Reminder.dayIndex(d)], 10, if (on) Ui.ON_ACCENT else Ui.DIM, bold = true).apply {
+            val st = s.week[i]
+            val on = st == 1
+            bottom.addView(label(if (st == 2) "🧊" else Reminder.DAY_LETTER[Reminder.dayIndex(d)], 10, if (on) Ui.ON_ACCENT else Ui.DIM, bold = true).apply {
                 gravity = Gravity.CENTER
                 background = if (on) rounded(Ui.ACCENT, 100) else rounded(Ui.CARD2, 100, if (i == 6) Ui.DIM else 0)
             }, lp(dp(26), dp(26)).also { it.leftMargin = dp(3) })
         }
         levelBox.addView(bottom)
-        if (s.todayXp > 0) levelBox.addView(label("Bugün +${s.todayXp} XP", 12, Ui.ACCENT, bold = true).apply { setPadding(0, dp(8), 0, 0) })
+        val foot = hbox().apply { setPadding(0, dp(8), 0, 0) }
+        foot.addView(label(if (s.todayXp > 0) "Bugün +${s.todayXp} XP" else "", 12, Ui.ACCENT, bold = true), lp(0, weight = 1f))
+        val got = Progress.badges(this).count { it.unlocked }
+        foot.addView(label("🏅 $got rozet · istatistik ›", 12, Ui.DIM, bold = true))
+        levelBox.addView(foot)
     }
 
     private fun menu(r: Reminder) {
@@ -296,13 +332,13 @@ class MainActivity : Activity() {
                 ) {
                     requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
                 } else {
-                    startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, packageName))
+                    startActivity(Intent(SysSettings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(SysSettings.EXTRA_APP_PACKAGE, packageName))
                 }
             }
         }
         if (!Alarms.canExact(this) && Build.VERSION.SDK_INT >= 31) {
             banner("Tam zamanlı alarm izni yok, hatırlatmalar gecikebilir.", "İzin ver") {
-                startActivity(Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, Uri.parse("package:$packageName")))
+                startActivity(Intent(SysSettings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, Uri.parse("package:$packageName")))
             }
         }
         val pm = getSystemService(PowerManager::class.java)
@@ -311,9 +347,9 @@ class MainActivity : Activity() {
             banner("Samsung pil tasarrufu uygulamayı uyutup hatırlatmaları geciktirebilir.", "Kısıtlamayı kaldır",
                 onClose = { prefs.edit().putBoolean("hideBattery", true).apply(); renderBanners() }) {
                 try {
-                    startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:$packageName")))
+                    startActivity(Intent(SysSettings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:$packageName")))
                 } catch (_: Exception) {
-                    startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+                    startActivity(Intent(SysSettings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
                 }
             }
         }

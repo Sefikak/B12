@@ -17,6 +17,7 @@ object Alarms {
     const val SNOOZE = "com.b12.hatirlat.SNOOZE"
     const val START = "com.b12.hatirlat.START"
     const val DISMISSED = "com.b12.hatirlat.DISMISSED"
+    const val TICK = "com.b12.hatirlat.TICK"
     const val SNOOZE_MIN = 10
 
     private fun am(ctx: Context) = ctx.getSystemService(AlarmManager::class.java)
@@ -91,9 +92,11 @@ class AlarmReceiver : BroadcastReceiver() {
             }
             Alarms.SNOOZED -> if (r != null && Alarms.stillDue(ctx, r, occ, now)) Notifier.remind(ctx, r, occ)
             Alarms.DISMISSED -> if (r != null && r.nag && Alarms.stillDue(ctx, r, occ, now)) {
-                // Kaydırılıp kapatıldı: yapılmadıysa birazdan geri gelsin.
-                Alarms.later(ctx, id, now + r.nagMin * 60_000L, Alarms.SNOOZED, occ)
+                // Kaydırılıp kapatıldı: yapılmadıysa birazdan geri gelsin (sessiz saatlerde değil).
+                val t = now + r.nagMin * 60_000L
+                if (!Settings.get(ctx).isQuiet(t)) Alarms.later(ctx, id, t, Alarms.SNOOZED, occ)
             }
+            Alarms.TICK -> if (r != null) Progress.markNow(ctx, r)
             Alarms.ENDED -> if (r != null && !r.deleted) {
                 val xp = Progress.record(ctx, r, at, Progress.Kind.TIMER, toast = false)
                 Notifier.ended(ctx, r, xp)
