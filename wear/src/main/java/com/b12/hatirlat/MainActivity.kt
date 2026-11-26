@@ -14,6 +14,7 @@ class MainActivity : WearActivity() {
     private lateinit var list: LinearLayout
     private lateinit var status: TextView
     private lateinit var level: LinearLayout
+    private lateinit var upd: TextView
     private val onChange: () -> Unit = { render() }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -25,6 +26,8 @@ class MainActivity : WearActivity() {
         c.addView(label("B12", 15, Ui.ACCENT, bold = true).apply { gravity = Gravity.CENTER }, lp())
         status = label("", 11, Ui.DIM).apply { gravity = Gravity.CENTER }
         c.addView(status, lp())
+        upd = pill("", Ui.ACCENT, Ui.ON_ACCENT, 12, 10, 6) {}.apply { visibility = android.view.View.GONE }
+        c.addView(upd, lp().also { it.topMargin = dp(6) })
         level = vbox()
         c.addView(level, lp().also { it.topMargin = dp(6) })
         list = vbox()
@@ -44,6 +47,7 @@ class MainActivity : WearActivity() {
         Store.addListener(onChange)
         render()
         Sync.pullAll(this)
+        Updater.check(this) { r, _ -> if (!isFinishing) showUpdate(r) }
         Sync.peer(this, Sync.CAP_PHONE) { name, installed ->
             status.text = when {
                 installed -> "Telefonla eşit"
@@ -51,6 +55,19 @@ class MainActivity : WearActivity() {
                 else -> "Telefon uzakta · sonra eşitlenir"
             }
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        Updater.resume(this)
+    }
+
+    /** Yeni sürüm varsa üstte düğme: dokununca indirir ve yükleme ekranını açar. */
+    private fun showUpdate(r: Updater.Release?) {
+        if (r == null) { upd.visibility = android.view.View.GONE; return }
+        upd.visibility = android.view.View.VISIBLE
+        upd.text = "⬆ ${r.version} güncellemesi"
+        upd.setOnClickListener { Updater.start(this, r) { upd.text = it } }
     }
 
     override fun onStop() {

@@ -90,6 +90,39 @@ class SettingsActivity : Activity() {
         val w = card()
         w.addView(label("Ana ekranda boş bir yere uzun bas → Widget'lar → B12. Bugünün işleri ✓ düğmeleriyle görünür.", 13, Ui.DIM))
         c.addView(w)
+
+        // Güncelleme
+        c.addView(section("Güncelleme"))
+        val u = card()
+        u.addView(label("Sürüm ${Updater.current(this)}", 16))
+        u.addView(label("B12 açılınca yeni sürümü kendisi denetler; varsa ana ekranda haber verir. Telefon ve saat ayrı ayrı güncellenir.", 13, Ui.DIM).apply {
+            setPadding(0, dp(6), 0, 0)
+        })
+        u.addView(pill("Şimdi denetle", Ui.CARD2, Ui.TEXT, 15) { btn ->
+            (btn as android.widget.TextView).text = "Denetleniyor…"
+            Updater.check(this, force = true) { r, err ->
+                if (isFinishing) return@check
+                btn.text = "Şimdi denetle"
+                when {
+                    err != null -> Toast.makeText(this, err, Toast.LENGTH_LONG).show()
+                    r == null -> Toast.makeText(this, "En son sürüm sende ✓", Toast.LENGTH_SHORT).show()
+                    else -> AlertDialog.Builder(this)
+                        .setTitle("B12 ${r.version} hazır")
+                        .setMessage(r.notes.ifBlank { "Yeni sürüm hazır." } + "\n\nHatırlatmaların ve XP'n korunur.")
+                        .setPositiveButton("Güncelle") { _, _ ->
+                            Updater.start(this, r) { s -> btn.text = s }
+                        }
+                        .setNegativeButton("Sonra", null)
+                        .show()
+                }
+            }
+        }, lp().also { it.topMargin = dp(12) })
+        c.addView(u)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        Updater.resume(this)
     }
 
     private fun pick(initial: Int, done: (Int) -> Unit) {

@@ -13,31 +13,80 @@ Yatağı topla, diş fırçala, 1 saat kitap oku… Yaptıkça XP kazan, seviye 
 
 ## İndir ve kur
 
-### [⬇ B12-telefon.apk'yı indir](https://github.com/Sefikak/B12/releases/latest/download/B12-telefon.apk)
+B12 iki parçadır: **telefon uygulaması** ve **saat uygulaması**. Yalnız telefonu kurup kullanabilirsin; saatte de görmek istersen ikisini de kur. İkisi de aynı sürümden olmalı.
 
-1. APK'yı telefona indirip aç. Telefon sorarsa **bilinmeyen kaynaktan kurma** iznini ver.
-2. İlk açılışta bildirim iznini ver.
-3. Samsung'da uygulamadaki **"Kısıtlamayı kaldır"** uyarısına dokun; yoksa pil tasarrufu hatırlatmaları geciktirebilir.
+### 📱 Telefona kurulum
+
+#### [⬇ B12-telefon.apk'yı indir](https://github.com/Sefikak/B12/releases/latest/download/B12-telefon.apk)
+
+1. Yukarıdaki bağlantıya **telefondan** dokun, dosya inecek.
+2. İnen dosyaya dokun. Telefon *"Bu kaynaktan uygulama yüklemeye izin ver"* derse **Ayarlar**'a gir, izni aç ve geri dön, sonra **Yükle**'ye bas.
+   > Play Store dışından kurulduğu için Play Protect "tanınmayan uygulama" diyebilir: **Yine de yükle**'ye bas.
+3. B12'yi aç, **bildirim iznini ver** (vermezsen hatırlatmalar görünmez).
+4. Samsung'daysan ana ekranda çıkan **"Kısıtlamayı kaldır"** uyarısına dokun ve **İzin ver** de. Bunu yapmazsan Samsung'un pil tasarrufu uygulamayı uyutup hatırlatmaları geciktirebilir.
 
 **Gereksinimler:** Android 8.0 veya üstü.
 
-### [⬇ B12-saat.apk'yı indir](https://github.com/Sefikak/B12/releases/latest/download/B12-saat.apk) (Galaxy Watch / Wear OS)
+### ⌚ Saate kurulum (Galaxy Watch / Wear OS)
 
-Saat APK'yı kendisi açamadığı için bir kereliğine bilgisayardan Wi-Fi üzerinden kurulur:
+#### [⬇ B12-saat.apk'yı indir](https://github.com/Sefikak/B12/releases/latest/download/B12-saat.apk)
 
-1. Saatte: **Ayarlar → Saat hakkında → Yazılım → Yazılım sürümü**'ne 5 kez dokun (Geliştirici seçenekleri açılır).
-2. **Ayarlar → Geliştirici seçenekleri**: **ADB hata ayıklama** ve **Kablosuz hata ayıklama**'yı aç. Saat ve bilgisayar aynı Wi-Fi'da olmalı.
-3. **Kablosuz hata ayıklama → Yeni cihaz eşle**: ekrandaki adres ve 6 haneli kodla bilgisayarda:
+Saatte dosya açma özelliği olmadığı için ilk kurulum **bir kereliğine bilgisayardan, Wi-Fi üzerinden** yapılır. Sonraki sürümleri saat kendisi indirir (aşağıya bak). Toplam 5 dakika sürer.
+
+**Hazırlık (bilgisayarda):**
+1. [Android SDK Platform Tools](https://developer.android.com/tools/releases/platform-tools)'u indir (Windows için *"Download SDK Platform-Tools for Windows"*) ve zip'i bir klasöre çıkar, örneğin `C:\platform-tools`. İçinde `adb.exe` var.
+2. `B12-saat.apk`'yı bilgisayara indir ve aynı klasöre koy.
+3. O klasörde adres çubuğuna `cmd` yazıp Enter'a bas, bir komut penceresi açılır.
+
+**Saatte geliştirici seçeneklerini aç:**
+1. **Ayarlar → Saat hakkında → Yazılım → Yazılım sürümü**'ne art arda **5 kez** dokun. *"Geliştirici modu açıldı"* yazar.
+2. **Ayarlar → Geliştirici seçenekleri**'ne gir, **ADB hata ayıklama**'yı aç.
+3. Aynı yerde **Kablosuz hata ayıklama**'yı aç. Saat ve bilgisayar **aynı Wi-Fi ağında** olmalı.
+
+**Eşle ve kur:**
+1. Saatte **Kablosuz hata ayıklama → Yeni cihaz eşle**'ye dokun. Ekranda bir **6 haneli kod** ve bir **adres** (örneğin `192.168.1.35:37891`) çıkar.
+2. Bilgisayardaki komut penceresine kendi kodunu ve adresini yazarak:
    ```
-   adb pair IP:PORT KOD
-   adb connect IP:PORT        (Kablosuz hata ayıklama ekranındaki ana adres)
+   adb pair 192.168.1.35:37891 123456
+   ```
+   *"Successfully paired"* yazarsa tamam. (Kod kısa sürede değişir; değiştiyse yenisini kullan.)
+3. Saatteki **Kablosuz hata ayıklama** ekranının en üstündeki adresi (eşleme adresinden **farklı** bir port, örneğin `192.168.1.35:43899`) kullanarak bağlan:
+   ```
+   adb connect 192.168.1.35:43899
+   ```
+4. Kur:
+   ```
    adb install -r B12-saat.apk
    ```
-   `adb`, [Android SDK Platform Tools](https://developer.android.com/tools/releases/platform-tools) içinde gelir.
+   *"Success"* yazınca B12 saatin uygulama listesinde. Açıp bildirim iznini ver.
+5. İş bitti; pil yemesin diye saatte **Kablosuz hata ayıklama**'yı kapatabilirsin.
 
-**Gereksinimler:** Wear OS 3 veya üstü (Galaxy Watch4 ve sonrası). Telefon ve saat uygulaması aynı sürümden olmalı.
+**Gereksinimler:** Wear OS 3 veya üstü (Galaxy Watch4 ve sonrası).
 
-> Telefon ve saat birbirini **Bluetooth üzerinden** bulur; internet ya da hesap gerekmez.
+> Telefon ve saat birbirini **Bluetooth üzerinden** kendiliğinden bulur; ek bir ayar, internet ya da hesap gerekmez. Telefonda üstte *"⌚ Saat bağlı · eşitleniyor"* yazıyorsa eşleşmişlerdir.
+
+<details>
+<summary><b>Sorun mu var?</b></summary>
+
+- **`adb` bulunamadı:** komut penceresini `adb.exe`'nin olduğu klasörde açtığından emin ol.
+- **`pair` başarısız:** kod süresi dolmuş olabilir; saatte eşleme ekranını kapatıp yeniden aç, yeni kodu kullan. Bilgisayar ve saat aynı Wi-Fi'da mı bak (misafir ağları cihazları birbirinden ayırabilir).
+- **`connect` başarısız:** eşleme adresini değil, Kablosuz hata ayıklama ekranının üstündeki adresi yaz. Ya da `adb mdns services` yaz; saat listede çıkıyorsa zaten bağlanmıştır, doğrudan `adb install` yap.
+- **Telefon saati görmüyor:** iki uygulamanın da aynı sürüm olduğundan ve saatin Galaxy Wearable ile telefona bağlı olduğundan emin ol.
+</details>
+
+### 🔄 Güncellemeler
+
+1.0.2'den itibaren B12 **kendini günceller**, telefonda da saatte de:
+
+- Uygulama açılınca yeni sürüm var mı diye bakar.
+- Varsa telefonda ana ekranda **"⬆ Yeni sürüm hazır · Güncelle"** şeridi, saatte en üstte **"⬆ … güncellemesi"** düğmesi çıkar.
+- Dokununca yenilikleri gösterir, indirir, dosyanın bozulmadığını denetler ve Android'in yükleme ekranını açar.
+- İlk seferde Android *"Bu kaynaktan yüklemeye izin ver"* diye sorar: izni açıp geri dönünce indirme kendiliğinden başlar.
+- Hatırlatmaların, XP'n ve serin **korunur**.
+
+Telefonda **Ayarlar → Güncelleme → Şimdi denetle** ile elle de bakabilirsin.
+
+> 1.0 veya 1.0.1 kullanıyorsan güncelleyici o sürümlerde yok: **1.0.2'yi bir kez** yukarıdaki gibi elle kur (verilerin silinmez), sonrası kendiliğinden gelir.
 
 ## Özellikler
 
@@ -84,7 +133,7 @@ Saat APK'yı kendisi açamadığı için bir kereliğine bilgisayardan Wi-Fi üz
 
 ## Gizlilik
 
-B12 internete bağlanmaz, hesap istemez, veri toplamaz. Her şey telefonunda ve saatinde durur; ikisi arasındaki eşitleme Bluetooth üzerinden Wear OS'un kendi kanalıyla yapılır.
+B12 hesap istemez, veri toplamaz. Her şey telefonunda ve saatinde durur; ikisi arasındaki eşitleme Bluetooth üzerinden Wear OS'un kendi kanalıyla yapılır. İnternete yalnızca yeni sürüm var mı diye GitHub'a bakmak ve güncellemeyi indirmek için çıkar; senden hiçbir bilgi göndermez.
 
 ## Geliştirme
 

@@ -1,5 +1,14 @@
 # B12 güncelleme notları
 
+## 1.0.2 — 26 Kasım 2026
+
+**Yeni**
+- B12 artık kendini güncelliyor: yeni sürüm çıkınca telefonda ana ekranda, saatte en üstte haber verir; dokununca indirip kurar. Hatırlatmalar ve XP korunur
+- Telefonda Ayarlar → Güncelleme: sürümünü gör, elle denetle
+
+**Not**
+- Bu sürümü bir kez elle kurman gerekiyor; sonrakiler kendiliğinden gelir
+
 ## 1.0.1 — 25 Kasım 2026
 
 **Düzeltmeler**

@@ -35,6 +35,7 @@ class MainActivity : Activity() {
     private lateinit var hero: LinearLayout
     private lateinit var levelBox: LinearLayout
     private val onChange: () -> Unit = { render() }
+    private var updState: String? = null
     private val ticker = android.os.Handler(android.os.Looper.getMainLooper())
     private val tick = object : Runnable {
         override fun run() { renderHeader(); ticker.postDelayed(this, 30_000) }
@@ -100,6 +101,7 @@ class MainActivity : Activity() {
         render()
         ticker.postDelayed(tick, 30_000)
         Sync.pullAll(this)
+        Updater.check(this) { _, _ -> if (!isFinishing) renderBanners() }
         Sync.peer(this, Sync.CAP_WATCH) { name, installed ->
             status.text = when {
                 installed -> "⌚ ${name ?: "Saat"} bağlı · eşitleniyor"
@@ -325,6 +327,11 @@ class MainActivity : Activity() {
 
     private fun renderBanners() {
         banners.removeAllViews()
+        Updater.available(this)?.let { r ->
+            if (updState == null && Updater.dismissed(this, r)) return@let
+            banner("⬆ Yeni sürüm ${r.version} hazır" + (updState?.let { " · $it" } ?: ""), "Güncelle",
+                onClose = { Updater.dismiss(this, r); renderBanners() }) { askUpdate(r) }
+        }
         if (!NotificationManagerCompat.from(this).areNotificationsEnabled()) {
             banner("Bildirimler kapalı, hatırlatmalar görünmez.", "Aç") {
                 if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED &&
@@ -358,6 +365,17 @@ class MainActivity : Activity() {
     override fun onResume() {
         super.onResume()
         renderBanners()
+        Updater.resume(this)
+    }
+
+    private fun askUpdate(r: Updater.Release) {
+        val size = if (r.size > 0) " (%.1f MB)".format(Locale("tr"), r.size / 1048576.0) else ""
+        AlertDialog.Builder(this)
+            .setTitle("B12 ${r.version}$size")
+            .setMessage(r.notes.ifBlank { "Yeni sürüm hazır." } + "\n\nHatırlatmaların ve XP'n korunur.")
+            .setPositiveButton("Güncelle") { _, _ -> Updater.start(this, r) { updState = it; renderBanners() } }
+            .setNegativeButton("Sonra", null)
+            .show()
     }
 
     private fun banner(text: String, button: String, onClose: (() -> Unit)? = null, onClick: () -> Unit) {
